@@ -86,7 +86,7 @@ const def={fines:[],contests:[],cases:[],laws:[],ents:[],prefs:[],docs:[],motifs
 let db=Object.assign({},def,JSON.parse(localStorage.getItem('cs_db')||'{}'));
 if(!db.cfg)db.cfg=def.cfg;if(!db.cfg.url)db.cfg.url=DEFAULT_URL; // ancienne configuration vide : on reprend l'adresse intégrée
 let EDIT=null,CLI={login:'',sel:[]},FORCE=false,RECNEW='',ACCMSG='',SRV=0,page='dash',role=null,dirty=false,timer;
-const pages=[['dash','Tableau de bord'],['new','Enregistrer une contestation'],['reg','Registre des amendes'],['con','Contestations'],['rem','Remboursements'],['doc','Documents'],['cas','Dossiers'],['ent','Entités'],['set','Paramètres'],['hist','Historique'],['acc','Comptes'],['help',"Mode d'emploi"]];
+const pages=[['dash','Tableau de bord'],['new','Enregistrer une contestation'],['reg','Registre des amendes'],['con','Contestations'],['rem','Remboursements'],['doc','Documents'],['app',"Cour d'appel"],['cas','Dossiers'],['ent','Entités'],['set','Paramètres'],['hist','Historique'],['acc','Comptes'],['help',"Mode d'emploi"]];
 
 /* ---------- Thème ---------- */
 function setTheme(t){document.documentElement.dataset.theme=t;localStorage.setItem('cs_theme',t);$('#thm').textContent=t=='dark'?'☀ Jour':'🌙 Nuit'}
@@ -185,6 +185,13 @@ const dfr=d=>d.toLocaleDateString('fr-FR');
 const eid=e=>String(Math.abs(+hash(nk(e)))%1000).padStart(3,'0');
 const slug=s=>nk(s).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 const payOf=ls=>ls.length>0&&ls.every(r=>r.c.pay=='Payé');
+/* Factures Cour d'appel : intégrées aux totaux ; statut de paiement stocké dans les données du document (paid / payDate) */
+const apDocs=()=>db.docs.filter(d=>d.type=='Facture appel').map(d=>{let sn=null;try{sn=JSON.parse(d.data||'')}catch(e){}return{d,sn,t:+d.date||0,ent:d.cible||'Entité non renseignée',amount:+d.total||0,paid:!!(sn&&sn.paid),ap:true}});
+const apSum=ls=>ls.reduce((a,r)=>a+r.amount,0);
+function payAp(id){if(SRV<21){toast('⚠ Script Google obsolète : redéployez la version 21 pour suivre les paiements');return}
+  const d=db.docs.find(x=>x.id==id);if(!d||!d.data){toast('Statut impossible à modifier (document trop volumineux)');return}
+  const sn=JSON.parse(d.data);if(sn.paid&&role=='user'){toast('🔒 Seul un administrateur peut annuler un paiement');return}
+  sn.paid=!sn.paid;sn.payDate=sn.paid?T():0;d.data=JSON.stringify(sn);d.upd=T();save()}
 const OPEN=new Set();let GRP=[],AGS=[];
 function tog(k,o){o?OPEN.add(k):OPEN.delete(k)}
 const stOf=l=>payOf(l)?'Payé':l.length&&l.every(r=>r.c.pay=='Facturé'||r.c.pay=='Payé')?'Facturé':'En attente de réclamation';
@@ -202,8 +209,9 @@ function invAg(j){const g=AGS[j],ls=live(g.list).filter(r=>r.c.pay!='Payé');
   billItems(ls);
   invoice(g.ent,ls,'toutes périodes (montants restant dus)','F-'+wkey(new Date()).replace(/-/g,'')+'-'+eid(g.ent),false)}
 const cs=v=>{v=String(v);if(/^[=+\-@\t\r]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'};
-function exportRem(){const rows=[['Semaine du','Entité','N° amende','Justiciable','Naissance','Infraction','Date de décision','Validé par','Montant ($)','Statut']];
+function exportRem(){const apr=apDocs();const rows=[['Semaine du','Entité','N° amende','Justiciable','Naissance','Infraction','Date de décision','Validé par','Montant ($)','Statut']];
   refunds().sort((a,b)=>a.t-b.t).forEach(r=>rows.push([dfr(monday(r.t)),r.ent,rf(r.f,'fine'),r.f.offender||'',r.f.dob||'',r.f.inf||'',dfr(new Date(r.t)),r.c.val||r.c.pec||'',r.amount,r.c.pay=='Payé'?'Payé':r.c.pay=='Facturé'?'Facturé':'En attente de réclamation']));
+  apr.sort((x,y)=>x.t-y.t).forEach(r=>rows.push([dfr(monday(r.t)),r.ent,r.d.num,'','',"Facture Cour d'appel",dfr(new Date(r.t)),r.d.cree||'',r.amount,r.paid?'Payé':'Facturé']));
   const csv='\ufeff'+rows.map(r=>r.map(cs).join(';')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='remboursements.csv';a.click()}
 
@@ -230,7 +238,7 @@ function shrink(f){return new Promise((res,rej)=>{const u=URL.createObjectURL(f)
 function pickStamp(login){const i=document.createElement('input');i.type='file';i.accept='image/png';
   i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const d=await shrink(f),j=await api({action:'savestamp',target:login,data:d});toast(j.ok?'Tampon enregistré':stampMsg(j),j.ok?2200:7000);if(j.ok)loadStamps()}catch(e){toast('Image illisible')}};i.click()}
 async function delStamp(login){if(!await dlg({msg:'Retirer ce tampon ?',ok:'Retirer',danger:true}))return;const j=await api({action:'savestamp',target:login,data:''});toast(j.ok?'Tampon retiré':stampMsg(j),j.ok?2200:7000);loadStamps()}
-const tag2=t=>`<span class="tag ${t=='Facture'?'w':'ok'}">${esc(t)}</span>`;
+const tag2=t=>`<span class="tag ${t=='Facture'||t=='Facture appel'?'w':'ok'}">${esc(t)}</span>`;
 const stampCell=(login,can)=>{const x=STP.find(y=>y.login==login);return (x?`<img src="${x.data}" style="height:42px;vertical-align:middle;background:#fff;border:1px solid var(--bd);border-radius:4px"> `:'—')+(can?` <button class="btn s" onclick="pickStamp('${esc(login)}')">${x?'Changer':'Importer'}</button>`+(x?` <button class="btn s d" onclick="delStamp('${esc(login)}')">Retirer</button>`:''):'')};
 
 /* ---------- Génération d'images PNG (attestation, facture) ---------- */
@@ -325,16 +333,16 @@ async function renderInv(sn){
   const fs=STP.find(x=>x.role=='fondateur'),as=sn.gr=='admin'?STP.find(x=>String(x.login).toLowerCase()==sn.gl&&x.role!='fondateur'):null,fim=fs?await loadImg(fs.data):null,aim=as?await loadImg(as.data):null; // fondateur toujours ; administrateur en plus s'il a généré la facture
   const tot=sn.items.reduce((a,i)=>a+i[4],0),now=new Date(sn.date),paid=sn.paid,ent=sn.ent,num=sn.num,period=sn.period;
   paint((g,W,H)=>{
-    frame(g,W,H);band(g,W,"Facture de remboursement d'amendes");
+    frame(g,W,H);band(g,W,sn.ap?"Facture · Cour d'appel":"Facture de remboursement d'amendes");
     g.fillStyle=COL.ac;g.textAlign='left';g.font='bold 46px '+FS;g.fillText('FACTURE',90,290);
     g.textAlign='right';g.font='22px '+FS;g.fillStyle=COL.tx;g.fillText('N° '+num,W-90,265);g.fillText('Émise le '+dfr(now),W-90,300);
     const bx=(x,t,l1,l2)=>{g.fillStyle=COL.bg;g.fillRect(x,340,500,130);g.strokeStyle=COL.bd;g.lineWidth=1;g.strokeRect(x,340,500,130);g.textAlign='left';g.fillStyle=COL.mut;g.font='italic 18px '+FS;g.fillText(t,x+18,372);g.fillStyle=COL.tx;g.font='bold 28px '+FS;g.fillText(fit(g,l1,460),x+18,415);g.font='20px '+FS;g.fillText(fit(g,l2,460),x+18,450)};
     bx(90,'ÉMETTEUR',db.cfg.court||'Cour Suprême','Service des contestations');
     bx(W-590,'FACTURÉ À',ent,'');
     g.textAlign='left';g.fillStyle=COL.tx;g.font='22px '+FS;
-    let y=wrapT(g,"Objet : remboursement d'amendes annulées suite à des contestations acceptées. Période : "+period+'.',90,525,W-180,34);
-    y=table(g,90,y+16,[{t:'N° amende',w:130},{t:'Décision',w:150},{t:'Justiciable',w:260},{t:'Infraction',w:360},{t:'Montant',w:160,a:'r'}],
-      sn.items.map(i=>[i[0],dfr(new Date(i[1])),i[2],i[3],fmt(i[4])]),54);
+    let y=wrapT(g,sn.ap?'Objet : '+sn.ap.obj+' — '+sn.ap.jur+(sn.ap.ref?', jugement n° '+sn.ap.ref:'')+(sn.ap.jd?' du '+dfr(new Date(sn.ap.jd)):'')+'.':"Objet : remboursement d'amendes annulées suite à des contestations acceptées. Période : "+period+'.',90,525,W-180,34);
+    y=table(g,90,y+16,sn.ap?[{t:'N° jugement',w:170},{t:'Date',w:150},{t:'Partie',w:260},{t:'Désignation',w:480}]:[{t:'N° amende',w:130},{t:'Décision',w:150},{t:'Justiciable',w:260},{t:'Infraction',w:360},{t:'Montant',w:160,a:'r'}],
+      sn.items.map(i=>sn.ap?[i[0],dfr(new Date(i[1])),i[2],i[3]]:[i[0],dfr(new Date(i[1])),i[2],i[3],fmt(i[4])]),54)
     y=totBox(g,W,y+30,paid?'TOTAL RÉGLÉ':'TOTAL À RÉGLER',tot)+50;
     g.textAlign='left';g.fillStyle=COL.tx;g.font='22px '+FS;g.fillText('Statut : '+(paid?'Payée':'À régler'),90,y);
     g.fillStyle=COL.mut;g.font='italic 20px '+FS;g.fillText(paid?'Merci pour votre règlement.':'Merci de régler cette facture dans les meilleurs délais.',90,y+36);
@@ -351,7 +359,7 @@ async function renderInv(sn){
       if(fim||fnd)sig(W-300,'',fn,fg,fim,o);
       y+=o+408}
     g.textAlign='center';g.font='16px '+FS;g.fillStyle=COL.mut;g.fillText('Document généré le '+now.toLocaleString('fr-FR')+' · '+num,W/2,(H||y)-60);
-    return y},'facture-'+slug(ent)+'-'+num+'.png')}
+    return y},(sn.ap?'facture-appel-':'facture-')+slug(ent)+'-'+num+'.png')}
 async function delCase(id){if(role!='admin'&&role!='fondateur')return;const d=db.cases.find(x=>x.id==id);if(!d)return;
   const cs=db.contests.filter(c=>c.caseId==id),fs=[...new Set(cs.map(c=>c.fineId))];
   if(!await dlg({msg:'Supprimer le dossier '+rf(d,'case')+' ('+d.offender+') ?\n\nSeront aussi supprimées : '+cs.length+' contestation(s) et '+fs.length+' amende(s) associée(s).\n\nCette action est irréversible.',ok:'Supprimer',danger:true}))return;
@@ -359,13 +367,35 @@ async function delCase(id){if(role!='admin'&&role!='fondateur')return;const d=db
 async function delDoc(id){if(role!='fondateur')return;const d=db.docs.find(x=>x.id==id);if(!d||!await dlg({msg:'Supprimer définitivement le document '+(d.type||'')+' '+(d.num||'')+' ?',ok:'Supprimer',danger:true}))return;kill('docs',id);save()}
 async function delAllDocs(){if(role!='fondateur'||!db.docs.length)return;if(!await dlg({msg:'Supprimer définitivement les '+db.docs.length+' documents générés ?\n\nCette action est irréversible.',ok:'Supprimer',danger:true}))return;db.docs.slice().forEach(d=>kill('docs',d.id));save()}
 async function clearJr(){if(role!='fondateur'||!await dlg({msg:"Vider tout l'historique (journal des actions) ? Cette action est irréversible.",ok:'Supprimer',danger:true}))return;const j=await api({action:'clearjournal'});toast(j.ok?'Historique vidé':'Refusé');jr=null;render()}
+const apO=(id,opts,ph,def)=>`<select id="${id}" onchange="apSel('${id}')">${opts.map(o=>`<option ${o==def?'selected':''} ${o[0]=='—'?'value=""':''}>${esc(o)}</option>`).join('')}<option value="__o">➕ Autre…</option></select><input id="${id}-o" placeholder="${esc(ph)}" style="display:none;margin-top:6px">`;
+function apRef(){const v=$('#ap-jd').value;if(v)$('#ap-r').value=v.split('-').reverse().join('')+'-…'}
+function apSel(id){const o=$('#'+id+'-o');o.style.display=$('#'+id).value=='__o'?'':'none';if(o.style.display=='')o.focus()}
+const apV=id=>{const s=$('#'+id).value;return s=='__o'?($('#'+id+'-o').value||'').trim():s};
+function lawOpts(){return CATS.map(c=>[c,db.laws.filter(l=>l.cat==c)]).filter(x=>x[1].length).map(([c,ls])=>`<optgroup label="${esc(c)}">${ls.map(l=>`<option value="${l.id}" data-a="${esc(l.amount||'')}">${esc(l.n)}</option>`).join('')}</optgroup>`).join('')}
+function addApL(){const d=document.createElement('div');d.className='apl';d.style.cssText='display:flex;flex-wrap:wrap;margin:8px 0;gap:6px;align-items:flex-start;padding:8px;border:1px solid var(--bd,#ddd);border-radius:8px';
+  d.innerHTML=`<div style="flex:1;min-width:170px"><select class="ap-ps" onchange="apPar(this)"><option value="">— Justiciable —</option>${[...new Set(db.cases.map(c=>String(c.offender||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(n=>`<option>${esc(n)}</option>`).join('')}<option value="__o">➕ Autre…</option></select><input class="ap-p" placeholder="Nom du justiciable" style="display:none;margin-top:6px"></div><div style="flex:2;min-width:220px"><select class="ap-s" onchange="apLaw(this)"><option value="">— Infraction —</option>${lawOpts()}<option value="__o">➕ Autre infraction (à saisir)…</option></select><div class="ap-n" style="display:none;margin-top:6px"><input class="ap-l" placeholder="Désignation de l'infraction"><select class="ap-c" style="margin-top:6px">${CATS.map(c=>`<option>${esc(c)}</option>`).join('')}</select><label style="display:block;margin-top:6px"><input type="checkbox" class="ap-sv" checked> Ajouter cette infraction à la liste</label></div></div><input class="ap-m" type="number" min="0" step="1" placeholder="Montant $" style="max-width:130px"><button type="button" class="btn s d" onclick="this.parentNode.remove()">✕</button>`;$('#apls').appendChild(d)}
+function apPar(sel){const i=sel.parentNode.querySelector('.ap-p');i.style.display=sel.value=='__o'?'':'none';if(sel.value=='__o')i.focus()}
+function apLaw(sel){const d=sel.closest('.apl'),n=sel.value=='__o';d.querySelector('.ap-n').style.display=n?'':'none';const o=sel.selectedOptions[0];if(!n&&o&&o.dataset.a)d.querySelector('.ap-m').value=o.dataset.a}
+function genApp(e){e.preventDefault();const ent=apV('ap-e');if(!ent){toast('Indiquez qui est facturé');return}
+  const jdv=$('#ap-jd').value,jd=jdv?new Date(jdv+'T12:00:00').getTime():T(),base=jdv?jdv.split('-').reverse().join(''):($('#ap-r').value||'').trim().replace(/-[\d…]*$/,''),nl=[],seq=1+Math.max(0,...db.docs.filter(d=>d.type=='Facture appel'&&d.data).map(d=>{const m=d.data.match(/"ref":"([^"]*)"/);return m&&m[1].startsWith(base+'-')?+m[1].slice(base.length+1)||0:0})),ref=base+'-'+seq; // n° = date-rang : -1 première facture du jour, -2 la suivante…
+  const it=[];for(const r of document.querySelectorAll('#apls .apl')){const sel=r.querySelector('.ap-s'),m=Math.round(+r.querySelector('.ap-m').value||0);let lib='';
+    if(sel.value=='__o'){lib=r.querySelector('.ap-l').value.trim();if(lib&&r.querySelector('.ap-sv').checked&&!db.laws.some(l=>nk(l.n)==nk(lib)&&l.cat==r.querySelector('.ap-c').value)&&!nl.some(l=>nk(l.n)==nk(lib)))nl.push({id:uid('l'),cat:r.querySelector('.ap-c').value,n:lib,amount:String(m||''),upd:T()})}
+    else if(sel.value){const l=db.laws.find(x=>x.id==sel.value);lib=l?l.n:''}
+    if(m>0&&lib)it.push([ref,jd,(ps=>ps.value=='__o'?r.querySelector('.ap-p').value.trim():ps.value)(r.querySelector('.ap-ps')),lib,m]);else if(m>0||lib){toast('Chaque ligne doit avoir une infraction et un montant');return}}
+  if(!it.length){toast('Ajoutez au moins une ligne (infraction + montant)');return}
+  nl.forEach(l=>db.laws.push(l));
+  const mg=new Map();it.forEach(i=>{const k=nk(i[0])+'|'+nk(i[2]),e=mg.get(k)||{b:i,l:new Map,m:0};const q=e.l.get(i[3])||{n:0,m:0};q.n++;q.m+=i[4];e.l.set(i[3],q);e.m+=i[4];mg.set(k,e)}); // fusion par n° de jugement + date + partie ; désignation détaillée avec les montants
+  const its=[...mg.values()].map(e=>[e.b[0],e.b[1],e.b[2],[...e.l].map(([l,q])=>l+(q.n>1?' ×'+q.n:'')+' ('+fmt(q.m)+')').join(' · '),e.m]);
+  const sn={num:un('APP-'+wkey(new Date()).replace(/-/g,'')+'-'+(ref.replace(/\D/g,'')||String(db.docs.length+1).padStart(3,'0'))),date:T(),ent,period:'',paid:$('#ap-pd').checked,gl:String(sessionStorage.cs_login||'').toLowerCase(),gn:me.nom||'',gg:me.grade||'',gr:role||'',
+    ap:{ref,jd,jur:"Cour d'appel",obj:apV('ap-o')||"Frais et condamnations prononcés suite à un jugement en appel"},items:its};
+  logDoc('Facture appel',sn,ent,its.reduce((a,i)=>a+i[4],0),its.length);renderInv(sn)}
 function redoc(id){const d=db.docs.find(x=>x.id==id);if(!d||!d.data){toast('Ce document ne peut pas être régénéré (trop volumineux)');return}
   const sn=JSON.parse(d.data);d.type=='Attestation'?renderAtt(sn):renderInv(sn)}
 
 /* ---------- Graphique des remboursements (8 dernières semaines) ---------- */
 const PAL=['#7a1f2b','#b8923a','#2a5db0','#2f7d4f','#c27a10','#6b6a75'];
 function chartRem(){
-  const rs=refunds(),N=8,cur=monday(T());
+  const rs=refunds().concat(role=='lecteur'?[]:apDocs()),N=8,cur=monday(T());
   if(!rs.length)return '';
   const wks=[];for(let i=N-1;i>=0;i--){const d=new Date(cur);d.setDate(d.getDate()-7*i);wks.push(d)}
   const tot={};rs.forEach(r=>tot[r.ent]=(tot[r.ent]||0)+r.amount);
@@ -411,26 +441,37 @@ function invSel(){const rs=live(selRows());
 
 /* ---------- Pages ---------- */
 const P={
+app(){
+  return `<h2>Facture Cour d'appel</h2><p class="mut">Génère une facture PNG à la suite d'un jugement rendu en appel. Les signatures sont identiques aux autres factures (fondateur toujours ; administrateur en plus s'il la génère). Chaque facture est conservée dans <b>Documents</b>.</p>
+  <form class="card" onsubmit="genApp(event)"><div class="row">
+  <div><label>Facturé à *</label>${apO('ap-e',['',...db.ents.map(x=>x.n)].map(x=>x||'— Choisir —'),'Nom de la personne ou de l\'entité')}</div>
+  <div><label>N° du jugement</label><input id="ap-r" value="${new Date().toLocaleDateString('fr-FR').replace(/\//g,'')}-…" readonly title="Date du jugement + rang de la facture (-1 première, -2 suivante…), attribué à la génération"></div>
+  <div><label>Date du jugement</label><input id="ap-jd" type="date" value="${new Date().toISOString().slice(0,10)}" onchange="apRef()"></div></div>
+  <label>Objet</label>${apO('ap-o',["Amendes confirmées suite à un jugement en appel","Remboursement d'amendes suite à un jugement en appel","Frais de procédure suite à un jugement en appel","Dommages et intérêts prononcés en appel"],"Objet de la facture")}
+  <h4>Lignes de la facture</h4><div id="apls"></div><button type="button" class="btn s g" onclick="addApL()">+ Ajouter une ligne</button>
+  <p><label style="display:inline"><input type="checkbox" id="ap-pd"> Facture déjà réglée (tampon « PAYÉ »)</label></p>
+  <button class="btn">Générer la facture PNG</button></form>`},
 doc(){
   const ds=db.docs.slice().sort((a,b)=>(+b.date||0)-(+a.date||0));
   return `<h2>Historique des documents générés</h2>${role=='fondateur'?'<p><button class="btn s d" onclick="delAllDocs()">Supprimer tous les documents (fondateur)</button></p>':''}<p class="mut">Chaque attestation et chaque facture générée est conservée ici. « Télécharger » régénère l'image PNG telle qu'elle avait été émise (mêmes montants, même numéro).</p>
-  <div class="row" style="margin-bottom:12px"><input id="dq" placeholder="Filtrer (numéro, nom, entité…)" oninput="filtDoc()"><select id="dt" onchange="filtDoc()"><option value="">Tous les types</option><option>Attestation</option><option>Facture</option></select></div>
+  <div class="row" style="margin-bottom:12px"><input id="dq" placeholder="Filtrer (numéro, nom, entité…)" oninput="filtDoc()"><select id="dt" onchange="filtDoc()"><option value="">Tous les types</option><option>Attestation</option><option>Facture</option><option>Facture appel</option></select></div>
   <div class="card tw"><table id="docT"><tr><th>Date</th><th>Type</th><th>N°</th><th>Pour</th><th>Éléments</th><th>Montant</th><th>Généré par</th><th></th></tr>
-  ${ds.map(d=>`<tr><td>${new Date(+d.date||0).toLocaleString('fr-FR')}</td><td><span hidden>${esc(d.type)}</span>${tag2(d.type)}</td><td>${esc(d.num)}</td><td>${esc(d.cible)}</td><td>${esc(d.nb)}</td><td><b>${fmt(d.total)}</b></td><td>${who(d.cree||'',d.creeGrade)}</td><td><button class="btn s" onclick="redoc('${d.id}')">Télécharger PNG</button>${role=='fondateur'?` <button class="btn s d" onclick="delDoc('${d.id}')">Supprimer</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="mut">Aucun document généré.</td></tr>'}</table></div>`},
+  ${ds.map(d=>`<tr><td>${new Date(+d.date||0).toLocaleString('fr-FR')}</td><td style="white-space:nowrap;min-width:120px"><span hidden>${esc(d.type)}</span>${tag2(d.type)}</td><td>${esc(d.num)}</td><td>${esc(d.cible)}</td><td>${esc(d.nb)}</td><td><b>${fmt(d.total)}</b></td><td>${who(d.cree||'',d.creeGrade)}</td><td><button class="btn s" onclick="redoc('${d.id}')">Télécharger PNG</button>${role=='fondateur'?` <button class="btn s d" onclick="delDoc('${d.id}')">Supprimer</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="mut">Aucun document généré.</td></tr>'}</table></div>`},
 rem(){
   GRP=[];AGS=[];const nv=db.contests.filter(c=>c.aVerif&&c.status=='Accepté').length;
-  const rs=refunds(),S=l=>l.reduce((a,r)=>a+r.amount,0),tot=S(rs)+archT();
+  const rs=refunds(),aps=apDocs(),S=l=>l.reduce((a,r)=>a+r.amount,0),tot=S(rs)+apSum(aps)+archT();
   const by={};rs.forEach(r=>(by[r.ent]=by[r.ent]||[]).push(r));
-  AGS=Object.entries(by).map(([ent,list])=>({ent,list})).sort((a,b)=>S(b.list)-S(a.list));
+  aps.forEach(r=>{by[r.ent]=by[r.ent]||[]});AGS=Object.entries(by).map(([ent,list])=>({ent,list,ap:aps.filter(r=>r.ent==ent)})).sort((a,b)=>S(b.list)-S(a.list));
   const wk={};rs.forEach(r=>{const m=monday(r.t),k=wkey(m);wk[k]=wk[k]||{m,g:{}};(wk[k].g[r.ent]=wk[k].g[r.ent]||[]).push(r)});
   const keys=Object.keys(wk).sort().reverse();
   const pt=l=>{const s=stOf(l),d=billD(l),j=Math.floor((T()-d)/864e5);return `<span class="tag ${s=='Payé'?'ok':s=='Facturé'?'b':'w'}">${s}${s=='Facturé'&&d?' le '+dfr(new Date(d))+' ('+(j<1?"aujourd'hui":'il y a '+j+' j')+')':''}</span>`};
-  const due=S(rs.filter(r=>r.c.pay!='Payé')),fac=S(rs.filter(r=>r.c.pay=='Facturé')),nof=S(rs.filter(r=>r.c.pay!='Payé'&&r.c.pay!='Facturé'));
+  const due=S(rs.filter(r=>r.c.pay!='Payé'))+apSum(aps.filter(r=>!r.paid)),fac=S(rs.filter(r=>r.c.pay=='Facturé'))+apSum(aps.filter(r=>!r.paid)),nof=S(rs.filter(r=>r.c.pay!='Payé'&&r.c.pay!='Facturé'));
   return `<h2>Remboursements à réclamer</h2><p class="mut">Seules les contestations « Accepté » sont comptées. La semaine (lundi → dimanche) correspond à la date d'acceptation. Cochez plusieurs amendes d'une <b>même entité</b> (même d'une semaine à l'autre) puis utilisez la barre en bas pour générer <b>une seule facture</b>. Chaque entité a un statut : <b>En attente de réclamation</b>, <b>Facturé</b> (passe automatiquement dès que vous générez la facture) ou <b>Payé</b>.</p>
   ${nv?`<div class="card" style="border:2px solid var(--warn)">⚠ ${nv} contestation(s) issue(s) de l'ancien statut « Réduite » sont comptées au montant <b>intégral</b> de l'amende. Vérifiez-les dans Contestations (repère ⚠) : si le remboursement était partiel, le total est surévalué.</div>`:''}<div class="grid"><div class="card stat"><b>${fmt(tot)}</b><span>Total remboursé</span></div><div class="card stat"><b>${fmt(nof)}</b><span>Pas encore facturé</span></div><div class="card stat"><b>${fmt(fac)}</b><span>Facturé, en attente de paiement</span></div><div class="card stat"><b>${fmt(tot-due)}</b><span>Payé par les entités</span></div></div>
   <button class="btn g" onclick="exportRem()" style="margin:0 0 14px">Exporter en CSV</button>
   <div class="card tw"><h3>Total par entité depuis le début</h3><table><tr><th>Entité</th><th>Amendes</th><th>Total</th><th>Payé</th><th>Facturé (impayé)</th><th>À facturer</th><th></th></tr>
-  ${AGS.map((g,j)=>{const pd=S(g.list.filter(r=>r.c.pay=='Payé')),fc=S(g.list.filter(r=>r.c.pay=='Facturé')),rest=S(g.list)-pd-fc;return `<tr><td>${esc(g.ent)}</td><td>${g.list.length}</td><td>${fmt(S(g.list))}</td><td>${fmt(pd)}</td><td>${fmt(fc)}</td><td><b>${fmt(rest)}</b></td><td><button class="btn s" onclick="invAg(${j})">Facture PNG (reste dû)</button></td></tr>`}).join('')||'<tr><td colspan="7" class="mut">Aucun remboursement.</td></tr>'}${archT()?`<tr><td><i>Archivé (payé depuis plus de 6 mois)</i></td><td>${db.archsum.reduce((a,x)=>a+(+x.n||0),0)}</td><td>${fmt(archT())}</td><td>${fmt(archT())}</td><td>${fmt(0)}</td><td><b>${fmt(0)}</b></td><td></td></tr>`:''}</table></div>
+  ${AGS.map((g,j)=>{const pd=S(g.list.filter(r=>r.c.pay=='Payé'))+apSum(g.ap.filter(r=>r.paid)),fc=S(g.list.filter(r=>r.c.pay=='Facturé'))+apSum(g.ap.filter(r=>!r.paid)),rest=S(g.list)-S(g.list.filter(r=>r.c.pay=='Payé'))-S(g.list.filter(r=>r.c.pay=='Facturé')),gt=S(g.list)+apSum(g.ap);return `<tr><td>${esc(g.ent)}${g.ap.length?` <span class="mut">(dont ${g.ap.length} facture(s) Cour d'appel)</span>`:''}</td><td>${g.list.length+g.ap.length}</td><td>${fmt(gt)}</td><td>${fmt(pd)}</td><td>${fmt(fc)}</td><td><b>${fmt(rest)}</b></td><td>${g.list.length?`<button class="btn s" onclick="invAg(${j})">Facture PNG (reste dû)</button>`:''}</td></tr>`}).join('')||'<tr><td colspan="7" class="mut">Aucun remboursement.</td></tr>'}${archT()?`<tr><td><i>Archivé (payé depuis plus de 6 mois)</i></td><td>${db.archsum.reduce((a,x)=>a+(+x.n||0),0)}</td><td>${fmt(archT())}</td><td>${fmt(archT())}</td><td>${fmt(0)}</td><td><b>${fmt(0)}</b></td><td></td></tr>`:''}</table></div>
+  ${aps.length?`<div class="card tw"><h3>Factures Cour d'appel</h3><table><tr><th>Date</th><th>N°</th><th>Facturé à</th><th>Montant</th><th>Statut</th><th></th></tr>${aps.sort((a,b)=>b.t-a.t).map(r=>`<tr><td>${dfr(new Date(r.t))}</td><td>${esc(r.d.num)}</td><td>${esc(r.ent)}</td><td><b>${fmt(r.amount)}</b></td><td><span class="tag ${r.paid?'ok':'b'}">${r.paid?'Payé':'Facturé'}</span></td><td>${role=='lecteur'?'':`<button class="btn s ${r.paid?'g':''}" onclick="payAp('${r.d.id}')">${r.paid?'Annuler le paiement':'Marquer payé'}</button> `}<button class="btn s" onclick="redoc('${r.d.id}')">PNG</button></td></tr>`).join('')}</table></div>`:''}
   ${keys.map(k=>{const w=wk[k],e=new Date(w.m);e.setDate(e.getDate()+6);const all=Object.values(w.g).flat(),pw=payOf(all);
     return `<details class="card" ${OPEN.has(k)?'open':''} ontoggle="tog('${k}',this.open)"><summary style="cursor:pointer"><b>Semaine du ${dfr(w.m)} au ${dfr(e)}</b> — ${fmt(S(all))} <span class="tag">${all.length} amende(s)</span> ${pt(all)}</summary>
     ${Object.entries(w.g).map(([ent,list])=>{const i=GRP.push({m:w.m,ent,list})-1,p=payOf(list);
@@ -441,8 +482,8 @@ dash(){
   const sc=ST.map(s=>[s,db.contests.filter(c=>c.status==s).length]),mx=Math.max(1,...sc.map(x=>x[1]));
   return `<h2>Tableau de bord</h2><div class="grid">
   <div class="card stat"><b>${db.fines.length}</b><span>Amendes enregistrées</span></div>
-  <div class="card stat"><b>${fmt(refunds().reduce((a,r)=>a+r.amount,0)+archT())}</b><span>Montant total remboursé (contestations acceptées)</span></div>
-  ${role=='lecteur'?'':`<div class="card stat"><b>${fmt(refunds().filter(r=>r.c.pay!='Payé').reduce((a,r)=>a+r.amount,0))}</b><span>Restant à réclamer aux entités</span></div>`}
+  <div class="card stat"><b>${fmt(refunds().reduce((a,r)=>a+r.amount,0)+archT()+(role=='lecteur'?0:apSum(apDocs())))}</b><span>Montant total remboursé (contestations acceptées${role=='lecteur'?'':' + factures Cour d\'appel'})</span></div>
+  ${role=='lecteur'?'':`<div class="card stat"><b>${fmt(refunds().filter(r=>r.c.pay!='Payé').reduce((a,r)=>a+r.amount,0)+apSum(apDocs().filter(r=>!r.paid)))}</b><span>Restant à réclamer aux entités</span></div>`}
   <div class="card stat"><b>${db.contests.length}</b><span>Contestations</span></div>
   <div class="card stat"><b>${open}</b><span>À traiter</span></div>
   <div class="card stat"><b>${db.cases.filter(c=>c.offender&&db.contests.some(x=>x.caseId==c.id)).length}</b><span>Dossiers de justiciables</span></div></div>
@@ -554,6 +595,7 @@ help(){
   <li><b>Entités</b> : suivi par agence. Le tableau liste chaque entité avec ses amendes, contestations (acceptées, rejetées, en cours), taux d'acceptation, montant remboursé et reste dû. « Détail » ouvre la fiche de l'entité : suivi par agent et par infraction, liste de toutes ses amendes avec leur statut de contestation et de paiement, et facture du reste dû. Les entités se créent dans Paramètres ; une amende dont l'entité n'est pas renseignée apparaît sous « Entité non renseignée ».</li>
   <li><b>Paramètres</b> : réservés à l'administrateur. Vous y gérez la liste des infractions (contravention, délit mineur, délit majeur, crime, crime fédéral), les entités et le préfixe des numéros (ex. AMD-0001) et collez l'URL du script Google pour activer la synchronisation.</li>
   <li><b>Blocage</b> : après 5 codes incorrects, le compte est bloqué 10 minutes. Un administrateur peut le débloquer tout de suite (Comptes › Débloquer ; pour un administrateur, seul le fondateur). Le fondateur, lui, utilise son code de déblocage (bouton sur l'écran de connexion). Les blocages et déblocages sont dans l'Historique.</li>
+  <li><b>Cour d'appel</b> : les factures d'appel sont comptées dans les totaux (tableau de bord, Remboursements, graphique, export CSV) ; marquez-les « Payé » dans Remboursements. La page « Cour d'appel » génère une facture PNG à la suite d'un jugement en appel (facturé à, n° et date du jugement, lignes avec montants). Signatures identiques aux autres factures ; la facture est conservée dans Documents (type « Facture appel »).</li>
   <li><b>Connexion</b> : chaque personne a son propre compte (identifiant + code) et peut changer son code avec « Mon code ». Rôles : <b>Utilisateur</b> (tout sauf Paramètres), <b>Administrateur</b> (Paramètres, Historique et gestion des Comptes en plus), <b>Fondateur</b> (administrateur dont le compte ne peut être modifié par personne d'autre). Chaque compte peut avoir un grade (Superviseur, Juge, Procureur, Avocat) affiché à côté du nom. La première personne qui fait passer une contestation de « En attente » à un autre statut en est inscrite comme prenant en charge.</li><li><b>Remboursements</b> : montants rendus (contestations acceptées) par semaine et par entité, avec le statut « En attente de réclamation », « Facturé » (automatique dès que la facture est générée) ou « Payé ». Les boutons « Facture PNG » et « Attestation PNG » génèrent une image à envoyer (la facture à l'entité, l'attestation au justiciable). Le magistrat qui a fait passer la contestation à « Accepté » est inscrit comme validateur : son « Nom affiché » doit donc être « Prénom Nom » et son grade renseigné.</li><li><b>Création de compte</b> : on saisit le prénom et le nom de famille ; l'identifiant est généré automatiquement (ex. « Jean Dupont » → jean.dupont, avec un numéro si déjà pris) et le nom affiché devient « Prénom Nom ». L'identifiant ne change plus ensuite.</li><li><b>Motifs de rejet</b> : un administrateur définit dans Paramètres une liste de motifs ; au moment d'un rejet, on choisit un motif dans la liste et on peut y ajouter une précision.</li><li><b>Verrouillage</b> : une contestation « Facturé » ou « Payé » ne peut plus changer de statut (ni de date de décision, ni voir sa facturation annulée) sans un administrateur, qui doit confirmer ; la modification est inscrite dans l'Historique. <b>Date de décision</b> : dans la page Contestations, un administrateur peut corriger la date d'une contestation acceptée (« approx. » = date estimée pour les anciennes). Le tableau de bord affiche un graphique des remboursements par semaine et par entité.</li><li><b>Documents</b> : l'historique de toutes les attestations et factures générées (qui, quand, pour qui, montant). Un clic sur « Télécharger PNG » régénère l'image à l'identique.</li><li><b>Tampons</b> : chaque personne peut importer son tampon (PNG à fond transparent) avec « Mon tampon » ; un administrateur peut aussi le faire pour un autre compte dans la page Comptes. Le tampon du magistrat qui a validé la contestation est apposé sur l'attestation.</li><li><b>Premier accès</b> : un compte créé par un administrateur (ou dont le code a été réinitialisé) reçoit un code provisoire ; à la première connexion, la personne doit choisir son propre code avant d'accéder à quoi que ce soit. <b>Consultation</b> : rôle réservé aux avocats, qui peuvent consulter le tableau de bord, le registre, les contestations et les dossiers, sans rien modifier (le script refuse toute écriture). Dans « Comptes », le bouton « Clients » lie l'avocat à des dossiers : il ne voit que les dossiers de ses clients, avec leurs amendes et contestations (sans les données de facturation).</li><li><b>Session</b> : votre code n'est envoyé qu'à la connexion ; ensuite un jeton temporaire (valable 6 h d'inactivité) identifie votre poste. Se déconnecter, changer son code ou être désactivé ferme la session immédiatement.</li><li><b>Modifier une saisie</b> : bouton « Modifier » dans le registre ou les contestations. Un utilisateur ne modifie que ce qu'il a créé (et jamais une contestation acceptée, facturée ou payée) ; un administrateur ou le fondateur modifie tout. Chaque modification est notée dans l'Historique. <b>Pièce jointe</b> : champ facultatif du formulaire, à remplir avec un lien https:// (Drive, capture en ligne…) ; elle s'affiche en 📎.</li><li><b>Connexion</b> : l'œil affiche le code ; « Se souvenir de mon identifiant » mémorise l'identifiant (jamais le code) ; un avertissement s'affiche si Verr. Maj est activé. Le fondateur peut publier un <b>message d'annonce</b> (Paramètres) visible sur l'écran de connexion et en haut de l'application.</li><li><b>Suppressions</b> : un utilisateur ne supprime que ce qu'il a lui-même créé, et jamais une contestation acceptée, facturée ou payée ; un administrateur supprime tout (noté dans l'Historique). <b>Archivage</b> (Paramètres) : déplace les contestations payées depuis plus de 6 mois vers des onglets d'archives du Sheet ; leurs montants restent comptés dans les totaux (ligne « Archivé »). <b>Heure</b> : tous les postes s'alignent sur l'heure du serveur à la connexion.</li><li><b>Décisions et comptes</b> : seuls les comptes de grade Juge, Procureur ou Superviseur (et le fondateur) peuvent passer une contestation à « Accepté » ou « Rejetée » ; un magistrat ou un administrateur peut annuler une décision. Dans Comptes, « Désactiver » bloque la connexion ; un compte désactivé propose alors « Réactiver » ou « Supprimer » (suppression définitive, avec confirmation, impossible pour soi-même et pour le fondateur). Seul le fondateur crée, modifie, désactive, supprime ou réinitialise le code d'un compte administrateur.</li><li><b>Historique</b> : journal des actions (qui, quand, quoi), visible par les administrateurs.</li><li><b>Thème</b> : bouton Jour/Nuit en haut à droite.</li></ol>
   <p class="mut">Synchronisation : chaque modification est envoyée au Google Sheet ; les données sont rechargées toutes les minutes.</p></div>`}
 };
@@ -648,7 +690,7 @@ async function delEnt(id){const x=db.ents.find(e=>e.id==id),k=x?db.fines.filter(
   kill('ents',id);save()}
 function savePrefs(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
   [['fine',f.fine],['case',f.case]].forEach(([id,v])=>{v=v.trim().toUpperCase().replace(/[^A-Z0-9]/g,'')||(id=='fine'?'A':'D');db.prefs=db.prefs.filter(p=>p.id!=id);db.prefs.push({id,v,upd:T()})});toast('Identifiants enregistrés');save()}
-const APPV='21';let LASTSEEN=0,EXPIRED=false,LOCKT=null,LOCKI=null,ANN='';
+const APPV='22';let LASTSEEN=0,EXPIRED=false,LOCKT=null,LOCKI=null,ANN='';
 const loginView=()=>{const rem=localStorage.cs_rem||(EXPIRED?sessionStorage.cs_login||'':'');return `<div class="logbox"><img class="seal" src="${LOGO_SRC}" alt=""><h1>${esc(db.cfg.court||'Cour Suprême')}</h1><p class="mut" style="margin:4px 0 14px">Accès réservé aux membres de la Cour</p>
   ${EXPIRED?'<p class="tag w" style="display:block;padding:8px;margin:0 0 12px">⏱ Votre session a expiré : reconnectez-vous.</p>':''}
   <form class="card logc" onsubmit="doLogin(event)" style="text-align:left"><label>Identifiant</label><input name="login" ${rem?'':'autofocus'} required autocomplete="username" value="${esc(rem)}">
@@ -770,7 +812,7 @@ function render(){
   $('#main').innerHTML=lec&&!has&&page!='help'
     ?`<h2>Aucune affaire en cours</h2><div class="card"><p>Aucune affaire en cours actuellement.</p><p class="mut">Les dossiers de vos clients apparaîtront ici dès qu'ils vous seront attribués. La page se met à jour automatiquement (environ chaque minute).</p><button class="btn g" onclick="pull(true)">Actualiser maintenant</button></div>`
     :old+(lec&&has&&page=='dash'&&!db.contests.some(c=>ST.indexOf(c.status)<2)?'<div class="card">Aucune affaire en cours actuellement : toutes les contestations de vos clients ont été jugées.</div>':'')+P[page]();
-  $('#main').className=lec?'ro':'';selBar();
+  $('#main').className=lec?'ro':'';if(page=='app'&&$('#apls')&&!$('#apls').children.length)addApL();selBar();
 }
 migr();render();if(sessionStorage.cs_tok&&db.cfg.url)resume();
 </script>
