@@ -28,7 +28,8 @@ textarea{min-height:70px}input[type=checkbox]{width:auto}
 .tw{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid var(--bd);text-align:left;font-size:14px;vertical-align:top}
 th{color:var(--mut);font-weight:600}
 .tag{padding:2px 8px;border-radius:10px;font-size:12px;background:var(--bd)}
-.tag.b{background:#2a5db0;color:#fff}.tag.ok{background:var(--ok);color:var(--onac)}.tag.ko{background:var(--ko);color:var(--onac)}.tag.w{background:var(--warn);color:var(--onac)}
+.tag.b{background:#2a5db0;color:#fff}
+.tag.ap{background:#5b3a99;color:#fff}.apH{background:repeating-linear-gradient(45deg,#ffffffb0 0 3px,transparent 3px 6px)}.tag.ok{background:var(--ok);color:var(--onac)}.tag.ko{background:var(--ko);color:var(--onac)}.tag.w{background:var(--warn);color:var(--onac)}
 .bar{height:10px;background:var(--ac2);border-radius:5px}.mut{color:var(--mut)}
 .toast{position:fixed;bottom:84px;right:16px;background:var(--ok);color:#fff;padding:10px 16px;border-radius:8px;z-index:100;max-width:420px}
 #main{padding-bottom:90px}
@@ -56,6 +57,13 @@ th{color:var(--mut);font-weight:600}
 .pw{position:relative}.pw input{padding-right:44px}
 .pw .eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;font-size:18px;color:var(--mut)}
 nav:empty{display:none}
+
+.mls{position:absolute;left:0;right:0;top:100%;z-index:50;max-height:280px;overflow:auto;background:var(--card);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px #0004;margin-top:2px}
+.mli{padding:7px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:baseline}.mli:hover,.mli.hi{background:var(--bg)}
+.mlh{padding:6px 12px 2px;font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.mlrow{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;margin-top:6px;background:var(--card)}
+.mlrow .nm{flex:1;min-width:0}.mlrow .pr{font-weight:700;white-space:nowrap}.mlrow input{max-width:130px;margin:0}
+.mltot{display:flex;justify-content:space-between;padding:10px;margin-top:8px;border-top:2px solid var(--ac2);font-weight:700}
 </style>
 </head>
 <body>
@@ -99,7 +107,7 @@ const CATS=['Contravention','Délit mineur','Délit majeur','Crime','Crime féd�
 function save(){if(role=='lecteur'){toast('🔒 Compte en consultation : modification impossible');db=JSON.parse(localStorage.getItem('cs_db'));render();return}
   localStorage.setItem('cs_db',JSON.stringify(db));dirty=true;clearTimeout(timer);timer=setTimeout(push,800);render()}
 function status(t){$('#sync').textContent=t}
-const soft=()=>{if(page=='new'||EDIT||document.querySelector('.ov'))return;const af=document.querySelector('#accF input[name=prenom]');if(af&&(af.value||document.querySelector('#accF input[name=famille]').value))return;if(!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&(page=='rem'||!document.querySelector('main details[open]')))render()};
+const soft=()=>{if(page=='new'||page=='app'||EDIT||document.querySelector('.ov'))return;const af=document.querySelector('#accF input[name=prenom]');if(af&&(af.value||document.querySelector('#accF input[name=famille]').value))return;if(!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&(page=='rem'||!document.querySelector('main details[open]')))render()};
 function merge(a,b,srv){const m={};(a||[]).forEach(r=>{r.upd=+r.upd||0;if(!m[r.id]||r.upd>m[r.id].upd)m[r.id]=r});(b||[]).forEach(r=>{r.upd=+r.upd||0;if(!m[r.id]||r.upd>m[r.id].upd||(srv&&r.upd==m[r.id].upd))m[r.id]=r});return Object.values(m)} // à date égale, la version du serveur l'emporte (elle contient l'auteur, le validateur…)
 const wipe=()=>{db.fines=[];db.contests=[];db.cases=[];db.docs=[];db.archsum=[];db.tomb=[]};
 function mergeAll(r,w0){if(role=='lecteur')wipe();
@@ -188,10 +196,20 @@ const payOf=ls=>ls.length>0&&ls.every(r=>r.c.pay=='Payé');
 /* Factures Cour d'appel : intégrées aux totaux ; statut de paiement stocké dans les données du document (paid / payDate) */
 const apDocs=()=>db.docs.filter(d=>d.type=='Facture appel').map(d=>{let sn=null;try{sn=JSON.parse(d.data||'')}catch(e){}return{d,sn,t:+d.date||0,ent:d.cible||'Entité non renseignée',amount:+d.total||0,paid:!!(sn&&sn.paid),ap:true}});
 const apSum=ls=>ls.reduce((a,r)=>a+r.amount,0);
-function payAp(id){if(SRV<21){toast('⚠ Script Google obsolète : redéployez la version 21 pour suivre les paiements');return}
+function payAp(id){if(SRV>0&&SRV<21){toast('⚠ Script Google obsolète (version '+SRV+') : déployez une nouvelle version du script (21 ou plus) pour suivre les paiements',7000);return}
   const d=db.docs.find(x=>x.id==id);if(!d||!d.data){toast('Statut impossible à modifier (document trop volumineux)');return}
   const sn=JSON.parse(d.data);if(sn.paid&&role=='user'){toast('🔒 Seul un administrateur peut annuler un paiement');return}
   sn.paid=!sn.paid;sn.payDate=sn.paid?T():0;d.data=JSON.stringify(sn);d.upd=T();save()}
+const invCons=d=>{let sn;try{sn=JSON.parse(d.data||'')}catch(e){return[]}const refs=new Set((sn.items||[]).map(i=>i[0]));return db.fines.filter(f=>refs.has(rf(f,'fine'))).map(f=>cOf(f.id)).filter(Boolean)};
+function docSt(d){ // statut de paiement d'une facture : {txt,cls,paid} ou null (document sans statut)
+  if(d.type=='Facture appel'){let sn=null;try{sn=JSON.parse(d.data||'')}catch(e){}return sn?{txt:sn.paid?'Payé':'Facturé',cls:sn.paid?'ok':'b',paid:!!sn.paid}:null}
+  if(d.type=='Facture'){const cs=invCons(d);if(!cs.length)return null;const n=cs.filter(c=>c.pay=='Payé').length,paid=n==cs.length;return{txt:paid?'Payé':n?'Partiellement payé ('+n+'/'+cs.length+')':'Facturé',cls:paid?'ok':'b',paid}}
+  return null}
+const payBtn=d=>{const s=docSt(d);return s&&role!='lecteur'?`<button class="btn s ${s.paid?'g':''}" onclick="${d.type=='Facture appel'?'payAp':'payInv'}('${d.id}')">${s.paid?'Annuler le paiement':'Marquer payé'}</button> `:''};
+function payInv(id){const d=db.docs.find(x=>x.id==id);if(!d)return;const cs=invCons(d);
+  if(!cs.length){toast('Amendes de cette facture introuvables (archivées ou supprimées) : le paiement se gère dans Remboursements');return}
+  const p=cs.every(c=>c.pay=='Payé'),t=T();if(p&&role=='user'){toast('🔒 Seul un administrateur peut annuler un paiement');return}
+  cs.forEach(c=>{c.pay=p?(c.billDate?'Facturé':''):'Payé';c.payDate=p?'':t;c.upd=t});save()}
 const OPEN=new Set();let GRP=[],AGS=[];
 function tog(k,o){o?OPEN.add(k):OPEN.delete(k)}
 const stOf=l=>payOf(l)?'Payé':l.length&&l.every(r=>r.c.pay=='Facturé'||r.c.pay=='Payé')?'Facturé':'En attente de réclamation';
@@ -238,7 +256,7 @@ function shrink(f){return new Promise((res,rej)=>{const u=URL.createObjectURL(f)
 function pickStamp(login){const i=document.createElement('input');i.type='file';i.accept='image/png';
   i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const d=await shrink(f),j=await api({action:'savestamp',target:login,data:d});toast(j.ok?'Tampon enregistré':stampMsg(j),j.ok?2200:7000);if(j.ok)loadStamps()}catch(e){toast('Image illisible')}};i.click()}
 async function delStamp(login){if(!await dlg({msg:'Retirer ce tampon ?',ok:'Retirer',danger:true}))return;const j=await api({action:'savestamp',target:login,data:''});toast(j.ok?'Tampon retiré':stampMsg(j),j.ok?2200:7000);loadStamps()}
-const tag2=t=>`<span class="tag ${t=='Facture'||t=='Facture appel'?'w':'ok'}">${esc(t)}</span>`;
+const tag2=t=>`<span class="tag ${t=='Facture'?'w':t=='Facture appel'||t=='Attestation appel'?'ap':'ok'}">${esc(t)}</span>`;
 const stampCell=(login,can)=>{const x=STP.find(y=>y.login==login);return (x?`<img src="${x.data}" style="height:42px;vertical-align:middle;background:#fff;border:1px solid var(--bd);border-radius:4px"> `:'—')+(can?` <button class="btn s" onclick="pickStamp('${esc(login)}')">${x?'Changer':'Importer'}</button>`+(x?` <button class="btn s d" onclick="delStamp('${esc(login)}')">Retirer</button>`:''):'')};
 
 /* ---------- Génération d'images PNG (attestation, facture) ---------- */
@@ -248,47 +266,78 @@ const LOGO=new Image();LOGO.src=LOGO_SRC;
 document.body.insertAdjacentHTML('afterbegin','<img id="seal" alt="" aria-hidden="true" src="'+LOGO_SRC+'">');
 document.querySelector('header').insertAdjacentHTML('afterend','<div id="ann" class="ann" hidden></div>');
 const logoOk=()=>LOGO.complete&&LOGO.naturalWidth>0;
-function watermark(g,W,H){ /* filigrane central, assez transparent pour que le texte reste lisible + mention officielle en pied de page */
-  if(logoOk()){const s=Math.min(W*.68,H*.52,820);g.save();g.globalAlpha=.15;g.globalCompositeOperation='multiply';g.imageSmoothingQuality='high';g.drawImage(LOGO,(W-s)/2,(H-s)/2,s,s);g.restore()}
-  g.save();g.strokeStyle=COL.gold;g.lineWidth=2;g.beginPath();g.moveTo(90,H-114);g.lineTo(W-90,H-114);g.stroke();
-  g.textAlign='center';g.fillStyle=COL.mut;g.font='italic 16px '+FS;g.fillText('Document officiel de '+(db.cfg.court||'la Cour Suprême')+' — toute altération ou falsification rend le présent document nul.',W/2,H-90);g.restore()}
+const M=70; // marge des documents PNG
+function fitSz(g,t,maxW,px,min,wt){let s=px;const f=s=>(wt||'')+s+'px '+FS;g.font=f(s);while(s>min&&g.measureText(String(t)).width>maxW){s-=2;g.font=f(s)}return s} // réduit la police jusqu'à ce que le texte tienne
+function watermark(g,W,H){ /* filigrane central + mention officielle en pied de page */
+  if(logoOk()){const s=Math.min(W*.7,H*.5,860);g.save();g.globalAlpha=.08;g.globalCompositeOperation='multiply';g.imageSmoothingQuality='high';g.drawImage(LOGO,(W-s)/2,(H-s)/2,s,s);g.restore()}
+  g.save();g.strokeStyle=COL.gold;g.lineWidth=2;g.beginPath();g.moveTo(M,H-128);g.lineTo(W-M,H-128);g.stroke();
+  const mt='Document officiel de '+(db.cfg.court||'la Cour Suprême')+' — toute altération ou falsification rend le présent document nul.';g.textAlign='center';g.fillStyle=COL.mut;const sz=fitSz(g,mt,W-2*M,21,14,'italic ');g.font='italic '+sz+'px '+FS;g.fillText(fit(g,mt,W-2*M),W/2,H-92);g.restore()}
 function seals(g,W){ /* sceau de part et d'autre de l'en-tête */
-  if(!logoOk())return;const s=122,y=48;g.save();g.imageSmoothingQuality='high';
-  [64,W-64-s].forEach(x=>{g.drawImage(LOGO,x,y,s,s);g.strokeStyle=COL.gold;g.lineWidth=3;g.beginPath();g.arc(x+s/2,y+s/2,s/2+3,0,7);g.stroke()});g.restore()}
+  if(!logoOk())return;const s=140,y=53;g.save();g.imageSmoothingQuality='high';
+  [60,W-60-s].forEach(x=>{g.drawImage(LOGO,x,y,s,s);g.strokeStyle=COL.gold;g.lineWidth=3.5;g.beginPath();g.arc(x+s/2,y+s/2,s/2+4,0,7);g.stroke()});g.restore()}
 const COL={ac:'#14284b',gold:'#b8923a',tx:'#1c1b22',mut:'#6b6a75',bd:'#ddd6c8',bg:'#faf7f0',ok:'#2f7d4f'};
 const FS='Georgia, "Times New Roman", serif';
 function fit(g,t,mw){t=String(t==null?'':t);if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…'}
 function wrapT(g,t,x,y,mw,lh){let l='';String(t).split(' ').forEach(w=>{const n=l?l+' '+w:w;if(l&&g.measureText(n).width>mw){g.fillText(l,x,y);y+=lh;l=w}else l=n});if(l){g.fillText(l,x,y);y+=lh}return y}
-function paint(draw,name){const W=1240;let c=document.createElement('canvas');c.width=W;c.height=6000;
-  const h=Math.max(1754,Math.ceil(draw(c.getContext('2d'),W,0))+130);
-  c=document.createElement('canvas');c.width=W;c.height=h;const g2=c.getContext('2d');draw(g2,W,h);watermark(g2,W,h);
-  c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();toast('Image PNG générée')},'image/png')}
+function paint(draw,name){const W=1240; // mise en page sur 1240 unités ; image jusqu'à 2x (2480 px), réduite automatiquement pour les documents très longs (limite de taille d'image des téléphones)
+  let c=document.createElement('canvas');c.width=W;c.height=6000;
+  const h=Math.max(1754,Math.ceil(draw(c.getContext('2d'),W,0))+150);
+  const emit=S=>new Promise(res=>{try{const k=document.createElement('canvas');k.width=Math.round(W*S);k.height=Math.round(h*S);const g2=k.getContext('2d');g2.scale(S,S);draw(g2,W,h);watermark(g2,W,h);k.toBlob(b=>res(b),'image/png')}catch(e){res(null)}});
+  (async()=>{const S0=Math.max(1,Math.min(2,Math.sqrt(16e6/(W*h)),32000/h));let S=S0,b=await emit(S);
+    for(const r of [1,.7]){if(b)break;if(S>r){S=r;b=await emit(S)}}
+    if(!b){toast('Document trop long pour être converti en image : réduisez le nombre de lignes',6000);return}
+    const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();toast('Image PNG générée'+(S<1.95?' (résolution adaptée à la longueur du document)':''))})()}
 function frame(g,W,H){if(!H)return;g.fillStyle='#fff';g.fillRect(0,0,W,H);g.strokeStyle=COL.gold;g.lineWidth=4;g.strokeRect(24,24,W-48,H-48);g.strokeStyle=COL.ac;g.lineWidth=1.5;g.strokeRect(34,34,W-68,H-68)}
-function band(g,W,sub){g.fillStyle=COL.ac;g.fillRect(34,34,W-68,150);g.fillStyle=COL.gold;g.fillRect(34,184,W-68,6);g.fillStyle='#fff';g.textAlign='center';g.font='bold 46px '+FS;g.fillText(db.cfg.court||'Cour Suprême',W/2,105);g.font='italic 22px '+FS;g.fillText(sub,W/2,146);seals(g,W)}
-function wrapL(g,t,mw){ // découpe un texte en lignes ; un mot plus long que la colonne est coupé
+function band(g,W,sub){const bh=178;g.fillStyle=COL.ac;g.fillRect(34,34,W-68,bh);g.fillStyle=COL.gold;g.fillRect(34,34+bh,W-68,7);g.fillStyle='#fff';g.textAlign='center';
+  const ct=db.cfg.court||'Cour Suprême',s1=fitSz(g,ct,W-420,62,34,'bold ');g.font='bold '+s1+'px '+FS;
+  if(g.measureText(ct).width>W-420){const L=wrapL(g,ct,W-420).slice(0,2);L.forEach((t,k)=>g.fillText(t,W/2,88+k*42));const s2=fitSz(g,sub,W-420,26,18,'italic ');g.font='italic '+s2+'px '+FS;g.fillText(fit(g,sub,W-420),W/2,176)} // nom très long : sur deux lignes
+  else{g.fillText(ct,W/2,112);const s2=fitSz(g,sub,W-420,30,20,'italic ');g.font='italic '+s2+'px '+FS;g.fillText(fit(g,sub,W-420),W/2,162)}seals(g,W)}
+function wrapL(g,t,mw){ // découpe un texte en lignes ; un mot trop long est coupé de préférence après un tiret, sinon au caractère
   const out=[];String(t==null?'':t).split('\n').forEach(par=>{let l='';
-    par.split(' ').forEach(w=>{
+    const toks=[];par.split(' ').forEach(w=>{if(g.measureText(w).width>mw&&w.includes('-'))w.split(/(?<=-)/).forEach((p,k)=>toks.push({w:p,glue:k>0}));else toks.push({w,glue:false})});
+    toks.forEach(tk=>{let w=tk.w;
       while(g.measureText(w).width>mw){let k=w.length;while(k>1&&g.measureText(w.slice(0,k)).width>mw)k--;if(l){out.push(l);l=''}out.push(w.slice(0,k));w=w.slice(k)}
-      const n=l?l+' '+w:w;if(l&&g.measureText(n).width>mw){out.push(l);l=w}else l=n});
+      const n=l?l+(tk.glue?'':' ')+w:w;if(l&&g.measureText(n).width>mw){out.push(l);l=w}else l=n});
     out.push(l)});
   return out}
-function table(g,x,y,cols,rows,rh){const tw=cols.reduce((a,c)=>a+c.w,0),LH=26;
-  g.fillStyle=COL.ac;g.fillRect(x,y,tw,50);g.fillStyle='#fff';g.font='bold 20px '+FS;g.textBaseline='middle';
-  let cx=x;cols.forEach(c=>{g.textAlign=c.a=='r'?'right':'left';g.fillText(c.t,c.a=='r'?cx+c.w-12:cx+12,y+25);cx+=c.w});y+=50;
+function table(g,x,y,cols,rows,rh){const tw=cols.reduce((a,c)=>a+c.w,0),LH=34,PD=14;
+  g.fillStyle=COL.ac;g.fillRect(x,y,tw,68);g.fillStyle='#fff';g.font='bold 24px '+FS;g.textBaseline='middle';
+  let cx=x;cols.forEach(c=>{g.textAlign=c.a=='r'?'right':'left';g.fillText(c.t,c.a=='r'?cx+c.w-PD:cx+PD,y+34);cx+=c.w});y+=68;
   rows.forEach((r,i)=>{
-    const cells=r.map((v,j)=>{if(Array.isArray(v))return null;g.font=(cols[j].a=='r'?'bold ':'')+'20px '+FS;return wrapL(g,v,cols[j].w-24)}); // mesure : chaque cellule passe à la ligne si besoin
-    const h=Math.max(rh,Math.max(1,...cells.map(c=>c?c.length:1))*LH+24);
+    const cells=r.map((v,j)=>{g.font=(cols[j].a=='r'?'bold ':'')+'26px '+FS;return Array.isArray(v)?wrapL(g,v[0],cols[j].w-2*PD):wrapL(g,v,cols[j].w-2*PD)}); // chaque cellule passe à la ligne si besoin
+    const h=Math.max(rh,Math.max(1,...cells.map((c,j)=>c.length*LH+(Array.isArray(r[j])?30:0)))+34);
     g.fillStyle=i%2?'#fff':COL.bg;g.fillRect(x,y,tw,h);cx=x;
-    r.forEach((v,j)=>{const c=cols[j],a=c.a=='r',px=a?cx+c.w-12:cx+12,mw=c.w-24;g.textAlign=a?'right':'left';
-      if(Array.isArray(v)){g.font='20px '+FS;g.fillStyle=COL.tx;g.fillText(fit(g,v[0],mw),px,y+h/2-13);g.font='italic 17px '+FS;g.fillStyle=COL.mut;g.fillText(fit(g,v[1],mw),px,y+h/2+13)}
-      else{g.font=(a?'bold ':'')+'20px '+FS;g.fillStyle=COL.tx;const L=cells[j],top=y+h/2-(L.length-1)*LH/2;L.forEach((t,k)=>g.fillText(t,px,top+k*LH))}
+    r.forEach((v,j)=>{const c=cols[j],a=c.a=='r',px=a?cx+c.w-PD:cx+PD,mw=c.w-2*PD;g.textAlign=a?'right':'left';
+      if(Array.isArray(v)){const L=cells[j],bh=L.length*LH+30,top=y+h/2-bh/2;g.font='26px '+FS;g.fillStyle=COL.tx;L.forEach((t,k)=>g.fillText(t,px,top+LH/2+k*LH));g.font='italic 21px '+FS;g.fillStyle=COL.mut;g.fillText(fit(g,v[1]||'',mw),px,top+L.length*LH+14)}
+      else{g.font=(a?'bold ':'')+'26px '+FS;g.fillStyle=COL.tx;const L=cells[j],top=y+h/2-(L.length-1)*LH/2;L.forEach((t,k)=>g.fillText(t,px,top+k*LH))}
       cx+=c.w});
-    g.strokeStyle=COL.bd;g.lineWidth=1;g.beginPath();g.moveTo(x,y+h);g.lineTo(x+tw,y+h);g.stroke();y+=h});
+    g.strokeStyle=COL.bd;g.lineWidth=1.5;g.beginPath();g.moveTo(x,y+h);g.lineTo(x+tw,y+h);g.stroke();y+=h});
   g.textBaseline='alphabetic';return y}
-function totBox(g,W,y,label,amount){g.fillStyle=COL.bg;g.fillRect(W-570,y,480,90);g.strokeStyle=COL.gold;g.lineWidth=3;g.strokeRect(W-570,y,480,90);
-  g.textAlign='right';g.fillStyle=COL.mut;g.font='bold 18px '+FS;g.fillText(label,W-110,y+30);g.fillStyle=COL.ac;g.font='bold 40px '+FS;g.fillText(fmt(amount),W-110,y+74);return y+90}
-function stamp(g,x,y,l1,l2,col){g.save();g.translate(x,y);g.rotate(-0.2);g.scale(1.45,1.45);g.globalAlpha=.6;g.strokeStyle=col;g.fillStyle=col;g.lineWidth=5;g.beginPath();g.arc(0,0,92,0,7);g.stroke();g.lineWidth=2;g.beginPath();g.arc(0,0,80,0,7);g.stroke();
+function totBox(g,W,y,label,amount){const w=620,h=124,x=W-M-w;g.fillStyle=COL.bg;g.fillRect(x,y,w,h);g.strokeStyle=COL.gold;g.lineWidth=3;g.strokeRect(x,y,w,h);
+  g.textAlign='right';g.fillStyle=COL.mut;g.font='bold 24px '+FS;g.fillText(label,W-M-24,y+44);g.fillStyle=COL.ac;g.font='bold 56px '+FS;g.fillText(fmt(amount),W-M-24,y+102);return y+h}
+function stamp(g,x,y,l1,l2,col){g.save();g.translate(x,y);g.rotate(-0.2);g.scale(1.7,1.7);g.globalAlpha=.6;g.strokeStyle=col;g.fillStyle=col;g.lineWidth=5;g.beginPath();g.arc(0,0,92,0,7);g.stroke();g.lineWidth=2;g.beginPath();g.arc(0,0,80,0,7);g.stroke();
   g.textAlign='center';g.font='bold 24px '+FS;g.fillText(l1,0,-2);g.font='16px '+FS;g.fillText(fit(g,l2,140),0,26);g.restore()}
+// signatures communes aux factures et à l'attestation de remboursement : nom, prénom et grade uniquement (administrateur à gauche s'il génère, fondateur à droite)
+async function sigData(sn){const fs=STP.find(x=>x.role=='fondateur'),as=sn.gr=='admin'?STP.find(x=>String(x.login).toLowerCase()==sn.gl&&x.role!='fondateur'):null;
+  return{fs,as,fim:fs?await loadImg(fs.data):null,aim:as?await loadImg(as.data):null}}
+function sigBlock(g,W,y,sn,fs,as,fim,aim,paid){ // renvoie la hauteur utilisée
+  const fnd=sn.gr=='fondateur',fn=fnd?(sn.gn||(fs&&fs.nom)||''):((fs&&fs.nom)||''),fg=fnd?(sn.gg||(fs&&fs.grade)||''):((fs&&fs.grade)||'');
+  const adm=sn.gr=='admin';
+  if(!(fim||aim||fnd||adm))return 0;
+  const o=paid?60:0,sig=(x,nm,gr,im)=>{g.textAlign='center';g.fillStyle=COL.ac;const sz=fitSz(g,nm,520,36,24,'bold ');g.font='bold '+sz+'px '+FS;g.fillText(fit(g,nm,520),x,y+o+8);
+    if(gr){g.font='italic 29px '+FS;g.fillStyle=COL.tx;g.fillText(gr,x,y+o+52)}
+    if(im){const k=Math.min(400/im.width,300/im.height),w=im.width*k,h=im.height*k;g.save();g.globalAlpha=.95;g.imageSmoothingQuality='high';g.drawImage(im,x-w/2,y+o+72+(300-h)/2,w,h);g.restore()}
+    g.strokeStyle=COL.mut;g.lineWidth=1.5;g.beginPath();g.moveTo(x-230,y+o+392);g.lineTo(x+230,y+o+392);g.stroke();g.font='22px '+FS;g.fillStyle=COL.mut;g.fillText('Signature et tampon',x,y+o+428)};
+  if(aim||adm)sig(330,sn.gn||(as&&as.nom)||'',sn.gg||'',aim);
+  if(fim||fnd)sig(W-330,fn,fg,fim);
+  return o+470}
+function ribBox(g,W,y,rb,num){const rows=[['Titulaire',rb.t],['RIB',rb.r],['Banque',rb.b]].filter(r=>r[1]),w=W-2*M,vw=w-26-250-26; // valeurs complètes, sur plusieurs lignes si besoin (un RIB ne doit jamais être coupé)
+  g.font='bold 33px '+FS;const ls=rows.map(r=>wrapL(g,r[1],vw)),rh=ls.map(l=>Math.max(56,l.length*42+14));
+  const r0=104,note=r0+rh.slice(0,-1).reduce((a,b)=>a+b,0)+(ls[ls.length-1].length-1)*42+56,h=note+26;
+  g.fillStyle=COL.bg;g.fillRect(M,y,w,h);g.strokeStyle=COL.gold;g.lineWidth=3;g.strokeRect(M,y,w,h);
+  g.textAlign='left';g.fillStyle=COL.mut;g.font='bold 23px '+FS;g.fillText("COORDONNÉES BANCAIRES DE L'ÉMETTEUR — RÈGLEMENT PAR VIREMENT",M+26,y+46);
+  let yy=y+r0;rows.forEach((r,i)=>{g.fillStyle=COL.mut;g.font='27px '+FS;g.fillText(r[0]+' :',M+26,yy);g.fillStyle=COL.tx;g.font='bold 33px '+FS;ls[i].forEach((t,k)=>g.fillText(t,M+26+250,yy+k*42));yy+=rh[i]});
+  g.fillStyle=COL.mut;g.font='italic 24px '+FS;g.fillText("Merci d'indiquer le numéro de facture « "+num+" » en référence du virement.",M+26,y+note);return y+h}
 const un=b=>{let n=b,i=1;while(db.docs.some(d=>d.num==n))n=b+'-'+(++i);return n};
 function logDoc(type,sn,cible,total,nb){let data=JSON.stringify(sn);if(data.length>45000)data='';
   db.docs.push({id:uid('g'),type,num:sn.num,cible,total,nb,date:sn.date,data,cree:me.nom||'',creeGrade:me.grade||'',upd:T()});save()}
@@ -307,59 +356,84 @@ async function renderAtt(sn){
   const sd=stampFor({valLogin:sn.vl,val:sn.vn}),im=sd?await loadImg(sd.data):null,fs=STP.find(x=>x.role=='fondateur'),fim=fs&&!(sd&&sd.login==fs.login)?await loadImg(fs.data):null;
   paint((g,W,H)=>{
     frame(g,W,H);band(g,W,"Service des contestations d'amendes");
-    g.fillStyle=COL.ac;g.textAlign='center';g.font='bold 44px '+FS;g.fillText('ATTESTATION DE CONTESTATION',W/2,290);
-    g.fillStyle=COL.mut;g.font='22px '+FS;g.fillText('N° '+sn.num+'  ·  Délivrée le '+dfr(now),W/2,332);
-    g.textAlign='left';g.fillStyle=COL.tx;g.font='25px '+FS;
-    let y=wrapT(g,laCour()+' atteste que '+sn.off+(sn.ob?' (né(e) le '+bd(sn.ob)+')':'')+' a contesté '+(n>1?'les '+n+' amendes':"l'amende")+' ci-dessous. '+(n>1?'Ces contestations ont été examinées et acceptées':'Cette contestation a été examinée et acceptée')+', et le montant correspondant a été reversé au justiciable.',90,410,W-180,40);
-    y=table(g,90,y+20,[{t:'N° amende',w:120},{t:'Décision',w:140},{t:'Infraction',w:290},{t:'Entité',w:190},{t:'Validé par',w:190},{t:'Montant',w:130,a:'r'}],
-      sn.items.map(i=>[i[0],dfr(new Date(i[1])),i[2],i[3],[i[4],i[5]],fmt(i[6])]),72);
-    y=totBox(g,W,y+34,'SOMME TOTALE REVERSÉE',tot)+70;
-    g.textAlign='left';g.fillStyle=COL.tx;g.font='22px '+FS;g.fillText('Fait le '+dfr(now),90,y);
-    if(fim){const k=Math.min(330/fim.width,300/fim.height),w=fim.width*k,h=fim.height*k;g.save();g.globalAlpha=.95;g.imageSmoothingQuality='high';g.drawImage(fim,300-w/2,y+30+(300-h)/2,w,h);g.restore()}
-    g.textAlign='right';g.fillStyle=COL.tx;g.font='22px '+FS;g.fillText('Le magistrat',W-90,y);
-    g.font='bold 30px '+FS;g.fillStyle=COL.ac;g.fillText(fit(g,sn.vn,460),W-90,y+50);
-    g.font='italic 24px '+FS;g.fillStyle=COL.tx;g.fillText(sn.vg||'Magistrat',W-90,y+88);
-    if(im){const k=Math.min(330/im.width,300/im.height),w=im.width*k,h=im.height*k;g.save();g.globalAlpha=.95;g.imageSmoothingQuality='high';g.drawImage(im,W-280-w/2,y+95+(300-h)/2,w,h);g.restore()}
-    g.strokeStyle=COL.mut;g.lineWidth=1;g.beginPath();g.moveTo(W-470,y+360);g.lineTo(W-90,y+360);g.stroke();
-    g.textAlign='right';g.font='17px '+FS;g.fillStyle=COL.mut;g.fillText('Signature et tampon',W-90,y+385);
-    y+=430;
-    g.textAlign='center';g.font='16px '+FS;g.fillStyle=COL.mut;g.fillText('Document généré le '+now.toLocaleString('fr-FR')+' · '+sn.num,W/2,(H||y)-60);
+    g.fillStyle=COL.ac;g.textAlign='center';g.font='bold 54px '+FS;g.fillText('ATTESTATION DE CONTESTATION',W/2,322);
+    g.fillStyle=COL.mut;g.font='27px '+FS;g.fillText('N° '+sn.num+'  ·  Délivrée le '+dfr(now),W/2,372);
+    g.textAlign='left';g.fillStyle=COL.tx;g.font='31px '+FS;
+    let y=wrapT(g,laCour()+' atteste que '+sn.off+(sn.ob?' (né(e) le '+bd(sn.ob)+')':'')+' a contesté '+(n>1?'les '+n+' amendes':"l'amende")+' ci-dessous. '+(n>1?'Ces contestations ont été examinées et acceptées':'Cette contestation a été examinée et acceptée')+', et le montant correspondant a été reversé au justiciable.',M,456,W-2*M,48);
+    y=table(g,M,y+24,[{t:'N° amende',w:145},{t:'Décision',w:175},{t:'Infraction',w:290},{t:'Entité',w:160},{t:'Validé par',w:190},{t:'Montant',w:140,a:'r'}],
+      sn.items.map(i=>[i[0],dfr(new Date(i[1])),i[2],i[3],[i[4],i[5]],fmt(i[6])]),88);
+    y=totBox(g,W,y+40,'SOMME TOTALE REVERSÉE',tot)+80;
+    g.textAlign='left';g.fillStyle=COL.tx;g.font='28px '+FS;g.fillText('Fait le '+dfr(now),M,y);
+    if(fim){const k=Math.min(400/fim.width,300/fim.height),w=fim.width*k,h=fim.height*k;g.save();g.globalAlpha=.95;g.imageSmoothingQuality='high';g.drawImage(fim,330-w/2,y+40+(300-h)/2,w,h);g.restore()}
+    g.textAlign='center';g.fillStyle=COL.tx;g.font='27px '+FS;g.fillText('Le magistrat',W-330,y);
+    g.font='bold 36px '+FS;g.fillStyle=COL.ac;g.fillText(fit(g,sn.vn,520),W-330,y+54);
+    g.font='italic 29px '+FS;g.fillStyle=COL.tx;g.fillText(sn.vg||'Magistrat',W-330,y+98);
+    if(im){const k=Math.min(400/im.width,300/im.height),w=im.width*k,h=im.height*k;g.save();g.globalAlpha=.95;g.imageSmoothingQuality='high';g.drawImage(im,W-330-w/2,y+118+(300-h)/2,w,h);g.restore()}
+    g.strokeStyle=COL.mut;g.lineWidth=1.5;g.beginPath();g.moveTo(W-330-230,y+436);g.lineTo(W-330+230,y+436);g.stroke();
+    g.font='22px '+FS;g.fillStyle=COL.mut;g.fillText('Signature et tampon',W-330,y+472);
+    y+=500;
+    g.textAlign='center';g.font='20px '+FS;g.fillStyle=COL.mut;g.fillText('Document généré le '+now.toLocaleString('fr-FR')+' · '+sn.num,W/2,(H||y)-56);
     return y},'attestation-'+slug(sn.off)+'.png')}
+const ribRaw=()=>{let o={};try{o=JSON.parse((db.prefs.find(p=>p.id=='rib')||{}).v||'{}')||{}}catch(e){}return{t:String(o.t||''),r:String(o.r||''),b:String(o.b||'')}};
+const ribDef=()=>{const o=ribRaw();return o.r.trim()?{t:'',r:o.r.trim(),b:''}:null}; // RIB par défaut de l'émetteur (Paramètres, fondateur)
 function invoice(ent,list,period,num,paid){
   const it=list.slice().sort((a,b)=>a.t-b.t);
-  const sn={num:un(num),date:T(),ent,period,paid:!!paid,gl:String(sessionStorage.cs_login||'').toLowerCase(),gn:me.nom||'',gg:me.grade||'',gr:role||'',items:it.map(r=>[rf(r.f,'fine'),r.t,r.f.offender||'',r.f.inf||'',r.amount])};
+  const sn={num:un(num),date:T(),ent,period,paid:!!paid,gl:String(sessionStorage.cs_login||'').toLowerCase(),gn:me.nom||'',gg:me.grade||'',gr:role||'',rib:ribDef(),items:it.map(r=>[rf(r.f,'fine'),r.t,r.f.offender||'',r.f.inf||'',r.amount])};
   logDoc('Facture',sn,ent,it.reduce((a,r)=>a+r.amount,0),it.length);renderInv(sn)}
 async function renderInv(sn){
-  const fs=STP.find(x=>x.role=='fondateur'),as=sn.gr=='admin'?STP.find(x=>String(x.login).toLowerCase()==sn.gl&&x.role!='fondateur'):null,fim=fs?await loadImg(fs.data):null,aim=as?await loadImg(as.data):null; // fondateur toujours ; administrateur en plus s'il a généré la facture
+  const {fs,as,fim,aim}=await sigData(sn);
   const tot=sn.items.reduce((a,i)=>a+i[4],0),now=new Date(sn.date),paid=sn.paid,ent=sn.ent,num=sn.num,period=sn.period;
   paint((g,W,H)=>{
     frame(g,W,H);band(g,W,sn.ap?"Facture · Cour d'appel":"Facture de remboursement d'amendes");
-    g.fillStyle=COL.ac;g.textAlign='left';g.font='bold 46px '+FS;g.fillText('FACTURE',90,290);
-    g.textAlign='right';g.font='22px '+FS;g.fillStyle=COL.tx;g.fillText('N° '+num,W-90,265);g.fillText('Émise le '+dfr(now),W-90,300);
-    const bx=(x,t,l1,l2)=>{g.fillStyle=COL.bg;g.fillRect(x,340,500,130);g.strokeStyle=COL.bd;g.lineWidth=1;g.strokeRect(x,340,500,130);g.textAlign='left';g.fillStyle=COL.mut;g.font='italic 18px '+FS;g.fillText(t,x+18,372);g.fillStyle=COL.tx;g.font='bold 28px '+FS;g.fillText(fit(g,l1,460),x+18,415);g.font='20px '+FS;g.fillText(fit(g,l2,460),x+18,450)};
-    bx(90,'ÉMETTEUR',db.cfg.court||'Cour Suprême','Service des contestations');
-    bx(W-590,'FACTURÉ À',ent,'');
-    g.textAlign='left';g.fillStyle=COL.tx;g.font='22px '+FS;
-    let y=wrapT(g,sn.ap?'Objet : '+sn.ap.obj+' — '+sn.ap.jur+(sn.ap.ref?', jugement n° '+sn.ap.ref:'')+(sn.ap.jd?' du '+dfr(new Date(sn.ap.jd)):'')+'.':"Objet : remboursement d'amendes annulées suite à des contestations acceptées. Période : "+period+'.',90,525,W-180,34);
-    y=table(g,90,y+16,sn.ap?[{t:'N° jugement',w:170},{t:'Date',w:150},{t:'Partie',w:260},{t:'Désignation',w:480}]:[{t:'N° amende',w:130},{t:'Décision',w:150},{t:'Justiciable',w:260},{t:'Infraction',w:360},{t:'Montant',w:160,a:'r'}],
-      sn.items.map(i=>sn.ap?[i[0],dfr(new Date(i[1])),i[2],i[3]]:[i[0],dfr(new Date(i[1])),i[2],i[3],fmt(i[4])]),54)
-    y=totBox(g,W,y+30,paid?'TOTAL RÉGLÉ':'TOTAL À RÉGLER',tot)+50;
-    g.textAlign='left';g.fillStyle=COL.tx;g.font='22px '+FS;g.fillText('Statut : '+(paid?'Payée':'À régler'),90,y);
-    g.fillStyle=COL.mut;g.font='italic 20px '+FS;g.fillText(paid?'Merci pour votre règlement.':'Merci de régler cette facture dans les meilleurs délais.',90,y+36);
-    if(paid)stamp(g,W-300,y+105,'PAYÉ',db.cfg.court||'',COL.ok);
-    y+=paid?250:150;
-    const fnd=sn.gr=='fondateur', // facture générée par le fondateur : ses propres nom, prénom et grade (pas de mention « fondateur »)
-      fn=fnd?(sn.gn||(fs&&fs.nom)||''):((fs&&fs.nom)||''),fg=fnd?(sn.gg||(fs&&fs.grade)||''):((fs&&fs.grade)||'');
-    if(fim||aim||fnd){ // signatures : administrateur (si c'est lui qui génère) à gauche, fondateur à droite
-      const sig=(x,lab,nm,gr,im,o)=>{g.textAlign='center';g.fillStyle=COL.tx;g.font='22px '+FS;if(lab)g.fillText(lab,x,y);g.font='bold 28px '+FS;g.fillStyle=COL.ac;g.fillText(fit(g,nm,430),x,y+o);if(gr){g.font='italic 22px '+FS;g.fillStyle=COL.tx;g.fillText(gr,x,y+o+34)}
-        if(im){const k=Math.min(330/im.width,280/im.height),w=im.width*k,h=im.height*k;g.save();g.globalAlpha=.95;g.imageSmoothingQuality='high';g.drawImage(im,x-w/2,y+o+48+(280-h)/2,w,h);g.restore()}
-        g.strokeStyle=COL.mut;g.lineWidth=1;g.beginPath();g.moveTo(x-190,y+o+338);g.lineTo(x+190,y+o+338);g.stroke();g.font='17px '+FS;g.fillStyle=COL.mut;g.fillText('Signature et tampon',x,y+o+363)};
-      const o=paid?50:0; // facture réglée : le tampon « PAYÉ » occupe le haut, on décale les signatures
-      if(aim)sig(300,'',sn.gn||as.nom||'',sn.gg||'',aim,o);
-      if(fim||fnd)sig(W-300,'',fn,fg,fim,o);
-      y+=o+408}
-    g.textAlign='center';g.font='16px '+FS;g.fillStyle=COL.mut;g.fillText('Document généré le '+now.toLocaleString('fr-FR')+' · '+num,W/2,(H||y)-60);
+    g.fillStyle=COL.ac;g.textAlign='left';g.font='bold 62px '+FS;g.fillText('FACTURE',M,330);
+    g.textAlign='right';g.font='30px '+FS;g.fillStyle=COL.tx;g.fillText('N° '+num,W-M,300);g.fillText('Émise le '+dfr(now),W-M,344);
+    const bw=(W-2*M-40)/2,court=db.cfg.court||'Cour Suprême',prep=l1=>{const sz=fitSz(g,l1,bw-44,36,28,'bold ');g.font='bold '+sz+'px '+FS;return{sz,L:wrapL(g,l1,bw-44).slice(0,3)}},p1=prep(court),p2=prep(ent),bh=172+(Math.max(p1.L.length,p2.L.length)-1)*38; // noms complets, sur 2-3 lignes si besoin
+    const bx=(x,t,p,l2)=>{g.fillStyle=COL.bg;g.fillRect(x,392,bw,bh);g.strokeStyle=COL.bd;g.lineWidth=1.5;g.strokeRect(x,392,bw,bh);g.textAlign='left';g.fillStyle=COL.mut;g.font='italic 23px '+FS;g.fillText(t,x+22,434);g.fillStyle=COL.tx;g.font='bold '+p.sz+'px '+FS;p.L.forEach((s,k)=>g.fillText(s,x+22,490+k*38));g.font='27px '+FS;g.fillText(fit(g,l2,bw-44),x+22,536+(p.L.length-1)*38)};
+    bx(M,'ÉMETTEUR',p1,'Service des contestations');
+    bx(W-M-bw,'FACTURÉ À',p2,'');
+    g.textAlign='left';g.fillStyle=COL.tx;g.font='29px '+FS;
+    let y=wrapT(g,sn.ap?'Objet : '+sn.ap.obj+' — '+sn.ap.jur+(sn.ap.ref?', jugement n° '+sn.ap.ref:'')+(sn.ap.jd?' du '+dfr(new Date(sn.ap.jd)):'')+'.':"Objet : remboursement d'amendes annulées suite à des contestations acceptées. Période : "+period+'.',M,456+bh,W-2*M,44);
+    y=table(g,M,y+22,sn.ap?[{t:'N° jugement',w:200},{t:'Date',w:160},{t:'Partie',w:250},{t:'Désignation',w:490}]:[{t:'N° amende',w:145},{t:'Décision',w:175},{t:'Justiciable',w:235},{t:'Infraction',w:405},{t:'Montant',w:140,a:'r'}],
+      sn.items.map(i=>sn.ap?[i[0],dfr(new Date(i[1])),i[2],i[3]]:[i[0],dfr(new Date(i[1])),i[2],i[3],fmt(i[4])]),82);
+    y=totBox(g,W,y+36,paid?'TOTAL RÉGLÉ':'TOTAL À RÉGLER',tot)+56;
+    if(!paid&&sn.rib&&sn.rib.r)y=ribBox(g,W,y,sn.rib,num)+70; // RIB de l'émetteur (défini par le fondateur) : uniquement sur les factures à régler
+    g.textAlign='left';g.fillStyle=COL.tx;g.font='30px '+FS;g.fillText('Statut : '+(paid?'Payée':'À régler'),M,y);
+    g.fillStyle=COL.mut;g.font='italic 26px '+FS;g.fillText(paid?'Merci pour votre règlement.':'Merci de régler cette facture dans les meilleurs délais.',M,y+42);
+    if(paid)stamp(g,W-310,y+120,'PAYÉ',db.cfg.court||'',COL.ok);
+    y+=paid?270:110;
+    y+=sigBlock(g,W,y,sn,fs,as,fim,aim,paid);
+    g.textAlign='center';g.font='20px '+FS;g.fillStyle=COL.mut;g.fillText('Document généré le '+now.toLocaleString('fr-FR')+' · '+num,W/2,(H||y)-56);
     return y},(sn.ap?'facture-appel-':'facture-')+slug(ent)+'-'+num+'.png')}
+// Attestation de remboursement remise au justiciable après un jugement en appel
+async function renderRem(sn){
+  const {fs,as,fim,aim}=await sigData(sn),now=new Date(sn.date),tot=sn.items.reduce((a,i)=>a+i[1],0),ap=sn.ap||{};
+  paint((g,W,H)=>{
+    frame(g,W,H);band(g,W,"Cour d'appel · Service des contestations");
+    g.fillStyle=COL.ac;g.textAlign='center';g.font='bold 52px '+FS;g.fillText('ATTESTATION DE REMBOURSEMENT',W/2,322);
+    g.fillStyle=COL.mut;g.font='27px '+FS;g.fillText('N° '+sn.num+'  ·  Délivrée le '+dfr(now),W/2,372);
+    g.textAlign='left';g.fillStyle=COL.tx;g.font='31px '+FS;
+    let y=wrapT(g,laCour()+' atteste que '+sn.off+(sn.ob?' (né(e) le '+bd(sn.ob)+')':'')+' a obtenu, par jugement'+(ap.ref?' n° '+ap.ref:'')+" rendu par la Cour d'appel"+(ap.jd?' le '+dfr(new Date(ap.jd)):'')+', le remboursement des sommes détaillées ci-dessous. Le montant total de '+fmt(tot)+' a été reversé au justiciable.',M,456,W-2*M,48);
+    if(ap.obj){g.font='italic 28px '+FS;g.fillStyle=COL.mut;y=wrapT(g,'Objet : '+ap.obj+'.',M,y+8,W-2*M,42)}
+    y=table(g,M,y+24,[{t:'Date du jugement',w:250},{t:'Infraction',w:680},{t:'Montant',w:170,a:'r'}],sn.items.map(i=>[ap.jd?dfr(new Date(ap.jd)):'—',i[0],fmt(i[1])]),82);
+    y=totBox(g,W,y+40,'SOMME TOTALE REMBOURSÉE',tot)+80;
+    g.textAlign='left';g.fillStyle=COL.tx;g.font='28px '+FS;g.fillText('Fait le '+dfr(now),M,y);
+    y+=70;y+=sigBlock(g,W,y,sn,fs,as,fim,aim,false);
+    g.textAlign='center';g.font='20px '+FS;g.fillStyle=COL.mut;g.fillText('Document généré le '+now.toLocaleString('fr-FR')+' · '+sn.num,W/2,(H||y)-56);
+    return y},'attestation-remboursement-'+slug(sn.off)+'-'+sn.num+'.png')}
+let RMP=[];
+function rmPick(){const s=$('#rm-ps'),i=$('#rm-pn'),n=$('#rm-n');if(s.value=='__o'){i.style.display='';n.value='';i.focus();return}i.style.display='none';const p=s.value===''?null:RMP[+s.value];n.value=p?p.dob||'':''}
+function genRem(e){e.preventDefault();if(role=='user'){toast('Réservé aux administrateurs et au fondateur');return}
+  const s=$('#rm-ps').value,p=s==='__o'?null:(s===''?null:RMP[+s]),nm=s==='__o'?$('#rm-pn').value.trim():(p?p.name:'');
+  if(!nm){toast('Indiquez le justiciable');return}
+  const jdv=$('#rm-jd').value,jd=jdv?new Date(jdv+'T12:00:00').getTime():T(),ref=($('#rm-r').value||'').trim().slice(0,40),dob=$('#rm-n').value||'';
+  if($('#raq')&&$('#raq').value.trim()){toast('Cliquez sur « Ajouter infraction » pour valider l\'infraction recherchée (ou videz la recherche)');return}
+  const raw=[];for(const x of PK.ra.l){const m=Math.round(+x.amount||0);if(m>1e9){toast('Montant trop élevé');return}if(m<=0){toast('Montant manquant sur « '+x.n+' »');return}raw.push([x.n,m])}
+  if(!raw.length){toast('Ajoutez au moins une infraction (bouton « Ajouter infraction »)');return}
+  const mg=new Map();raw.forEach(([l,m])=>{const q=mg.get(l)||{n:0,m:0};q.n++;q.m+=m;mg.set(l,q)}); // lignes identiques regroupées (× n)
+  const items=[...mg].map(([l,q])=>[l+(q.n>1?' ×'+q.n:''),q.m]),now=new Date();
+  const sn={num:un('REM-'+wkey(now).replace(/-/g,'')+'-'+String(db.docs.filter(d=>d.type=='Attestation appel').length+1).padStart(3,'0')),date:T(),off:nm,ob:dob,gl:String(sessionStorage.cs_login||'').toLowerCase(),gn:me.nom||'',gg:me.grade||'',gr:role||'',
+    ap:{ref,jd,jur:"Cour d'appel",obj:apV('rm-o')||"Remboursement d'amendes suite à un jugement en appel"},items};
+  pkReset('ra');logDoc('Attestation appel',sn,nm,items.reduce((a,i)=>a+i[1],0),items.length);renderRem(sn)}
 async function delCase(id){if(role!='admin'&&role!='fondateur')return;const d=db.cases.find(x=>x.id==id);if(!d)return;
   const cs=db.contests.filter(c=>c.caseId==id),fs=[...new Set(cs.map(c=>c.fineId))];
   if(!await dlg({msg:'Supprimer le dossier '+rf(d,'case')+' ('+d.offender+') ?\n\nSeront aussi supprimées : '+cs.length+' contestation(s) et '+fs.length+' amende(s) associée(s).\n\nCette action est irréversible.',ok:'Supprimer',danger:true}))return;
@@ -371,29 +445,33 @@ const apO=(id,opts,ph,def)=>`<select id="${id}" onchange="apSel('${id}')">${opts
 function apRef(){const v=$('#ap-jd').value;if(v)$('#ap-r').value=v.split('-').reverse().join('')+'-…'}
 function apSel(id){const o=$('#'+id+'-o');o.style.display=$('#'+id).value=='__o'?'':'none';if(o.style.display=='')o.focus()}
 const apV=id=>{const s=$('#'+id).value;return s=='__o'?($('#'+id+'-o').value||'').trim():s};
-function lawOpts(){return CATS.map(c=>[c,db.laws.filter(l=>l.cat==c)]).filter(x=>x[1].length).map(([c,ls])=>`<optgroup label="${esc(c)}">${ls.map(l=>`<option value="${l.id}" data-a="${esc(l.amount||'')}">${esc(l.n)}</option>`).join('')}</optgroup>`).join('')}
-function addApL(){const d=document.createElement('div');d.className='apl';d.style.cssText='display:flex;flex-wrap:wrap;margin:8px 0;gap:6px;align-items:flex-start;padding:8px;border:1px solid var(--bd,#ddd);border-radius:8px';
-  d.innerHTML=`<div style="flex:1;min-width:170px"><select class="ap-ps" onchange="apPar(this)"><option value="">— Justiciable —</option>${[...new Set(db.cases.map(c=>String(c.offender||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(n=>`<option>${esc(n)}</option>`).join('')}<option value="__o">➕ Autre…</option></select><input class="ap-p" placeholder="Nom du justiciable" style="display:none;margin-top:6px"></div><div style="flex:2;min-width:220px"><select class="ap-s" onchange="apLaw(this)"><option value="">— Infraction —</option>${lawOpts()}<option value="__o">➕ Autre infraction (à saisir)…</option></select><div class="ap-n" style="display:none;margin-top:6px"><input class="ap-l" placeholder="Désignation de l'infraction"><select class="ap-c" style="margin-top:6px">${CATS.map(c=>`<option>${esc(c)}</option>`).join('')}</select><label style="display:block;margin-top:6px"><input type="checkbox" class="ap-sv" checked> Ajouter cette infraction à la liste</label></div></div><input class="ap-m" type="number" min="0" step="1" placeholder="Montant $" style="max-width:130px"><button type="button" class="btn s d" onclick="this.parentNode.remove()">✕</button>`;$('#apls').appendChild(d)}
-function apPar(sel){const i=sel.parentNode.querySelector('.ap-p');i.style.display=sel.value=='__o'?'':'none';if(sel.value=='__o')i.focus()}
-function apLaw(sel){const d=sel.closest('.apl'),n=sel.value=='__o';d.querySelector('.ap-n').style.display=n?'':'none';const o=sel.selectedOptions[0];if(!n&&o&&o.dataset.a)d.querySelector('.ap-m').value=o.dataset.a}
+function apSrch(){const q=nk($('#aps').value),b=$('#apr');if(q.length<2){b.innerHTML='';return}
+  const m=db.fines.filter(f=>nk([rf(f,'fine'),f.offender,f.inf,f.ent,f.cat].join(' ')).includes(q)).slice(-8).reverse();
+  b.innerHTML=m.length?m.map(f=>`<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1"><b>${esc(rf(f,'fine'))}</b> · ${esc(f.offender)} · ${esc(f.inf)} <span class="mut">(${esc(f.ent||'')})</span> · <b>${fmt(f.amount)}</b></span><button type="button" class="btn s" onclick="apAddF('${f.id}')">+ Ajouter</button></div>`).join(''):'<span class="mut">Aucune amende trouvée.</span>'}
+function apAddF(id){const f=db.fines.find(x=>x.id==id);if(!f)return;const l=db.laws.find(x=>x.n==f.inf&&x.cat==f.cat);
+  pkR('fa').l.push({lid:l?l.id:'',n:f.inf||'',cat:f.cat||'',amount:+f.amount||0,fixed:true,p:String(f.offender||'').trim(),custom:!l,save:false});pkRender('fa');toast('Amende '+rf(f,'fine')+' ajoutée à la facture')}
 function genApp(e){e.preventDefault();const ent=apV('ap-e');if(!ent){toast('Indiquez qui est facturé');return}
   const jdv=$('#ap-jd').value,jd=jdv?new Date(jdv+'T12:00:00').getTime():T(),base=jdv?jdv.split('-').reverse().join(''):($('#ap-r').value||'').trim().replace(/-[\d…]*$/,''),nl=[],seq=1+Math.max(0,...db.docs.filter(d=>d.type=='Facture appel'&&d.data).map(d=>{const m=d.data.match(/"ref":"([^"]*)"/);return m&&m[1].startsWith(base+'-')?+m[1].slice(base.length+1)||0:0})),ref=base+'-'+seq; // n° = date-rang : -1 première facture du jour, -2 la suivante…
-  const it=[];for(const r of document.querySelectorAll('#apls .apl')){const sel=r.querySelector('.ap-s'),m=Math.round(+r.querySelector('.ap-m').value||0);let lib='';
-    if(sel.value=='__o'){lib=r.querySelector('.ap-l').value.trim();if(lib&&r.querySelector('.ap-sv').checked&&!db.laws.some(l=>nk(l.n)==nk(lib)&&l.cat==r.querySelector('.ap-c').value)&&!nl.some(l=>nk(l.n)==nk(lib)))nl.push({id:uid('l'),cat:r.querySelector('.ap-c').value,n:lib,amount:String(m||''),upd:T()})}
-    else if(sel.value){const l=db.laws.find(x=>x.id==sel.value);lib=l?l.n:''}
-    if(m>0&&lib)it.push([ref,jd,(ps=>ps.value=='__o'?r.querySelector('.ap-p').value.trim():ps.value)(r.querySelector('.ap-ps')),lib,m]);else if(m>0||lib){toast('Chaque ligne doit avoir une infraction et un montant');return}}
-  if(!it.length){toast('Ajoutez au moins une ligne (infraction + montant)');return}
+  if($('#faq')&&$('#faq').value.trim()){toast('Cliquez sur « Ajouter infraction » pour valider l\'infraction recherchée (ou videz la recherche)');return}
+  const it=[];for(const x of PK.fa.l){const m=Math.round(+x.amount||0);if(m<=0){toast('Montant manquant sur « '+x.n+' »');return}
+    if(x.custom&&x.save&&!db.laws.some(l=>nk(l.n)==nk(x.n)&&l.cat==x.cat)&&!nl.some(l=>nk(l.n)==nk(x.n)))nl.push({id:uid('l'),cat:x.cat,n:x.n,amount:String(m||''),upd:T()});
+    it.push([ref,jd,x.p||'',x.n,m])}
+  if(!it.length){toast('Ajoutez au moins une infraction (bouton « Ajouter infraction »)');return}
   nl.forEach(l=>db.laws.push(l));
   const mg=new Map();it.forEach(i=>{const k=nk(i[0])+'|'+nk(i[2]),e=mg.get(k)||{b:i,l:new Map,m:0};const q=e.l.get(i[3])||{n:0,m:0};q.n++;q.m+=i[4];e.l.set(i[3],q);e.m+=i[4];mg.set(k,e)}); // fusion par n° de jugement + date + partie ; désignation détaillée avec les montants
   const its=[...mg.values()].map(e=>[e.b[0],e.b[1],e.b[2],[...e.l].map(([l,q])=>l+(q.n>1?' ×'+q.n:'')+' ('+fmt(q.m)+')').join(' · '),e.m]);
-  const sn={num:un('APP-'+wkey(new Date()).replace(/-/g,'')+'-'+(ref.replace(/\D/g,'')||String(db.docs.length+1).padStart(3,'0'))),date:T(),ent,period:'',paid:$('#ap-pd').checked,gl:String(sessionStorage.cs_login||'').toLowerCase(),gn:me.nom||'',gg:me.grade||'',gr:role||'',
+  const sn={num:un('APP-'+wkey(new Date()).replace(/-/g,'')+'-'+(ref.replace(/\D/g,'')||String(db.docs.length+1).padStart(3,'0'))),date:T(),ent,period:'',paid:$('#ap-pd').checked,rib:($('#ap-rib')&&$('#ap-rib').checked)?ribDef():null,gl:String(sessionStorage.cs_login||'').toLowerCase(),gn:me.nom||'',gg:me.grade||'',gr:role||'',
     ap:{ref,jd,jur:"Cour d'appel",obj:apV('ap-o')||"Frais et condamnations prononcés suite à un jugement en appel"},items:its};
-  logDoc('Facture appel',sn,ent,its.reduce((a,i)=>a+i[4],0),its.length);renderInv(sn)}
+  pkReset('fa');logDoc('Facture appel',sn,ent,its.reduce((a,i)=>a+i[4],0),its.length);renderInv(sn)}
 function redoc(id){const d=db.docs.find(x=>x.id==id);if(!d||!d.data){toast('Ce document ne peut pas être régénéré (trop volumineux)');return}
-  const sn=JSON.parse(d.data);d.type=='Attestation'?renderAtt(sn):renderInv(sn)}
+  const sn=JSON.parse(d.data);d.type=='Attestation'?renderAtt(sn):d.type=='Attestation appel'?renderRem(sn):renderInv(sn)}
 
 /* ---------- Graphique des remboursements (8 dernières semaines) ---------- */
 const PAL=['#7a1f2b','#b8923a','#2a5db0','#2f7d4f','#c27a10','#6b6a75'];
+function invCard(){if(role=='lecteur')return '';
+  const L=db.docs.filter(d=>d.type=='Facture'||d.type=='Facture appel').sort((a,b)=>(+b.date||0)-(+a.date||0));if(!L.length)return '';
+  const wait=L.filter(d=>{const s=docSt(d);return s&&!s.paid}).length;
+  return `<div class="card tw"><h3>Factures émises <span class="mut" style="font-weight:400">· ${wait} en attente de paiement</span></h3><table><tr><th>Date</th><th>Type</th><th>N°</th><th>Facturé à</th><th>Montant</th><th>Statut</th><th></th></tr>${L.slice(0,8).map(d=>{const s=docSt(d);return `<tr><td>${dfr(new Date(+d.date||0))}</td><td>${tag2(d.type)}</td><td>${esc(d.num)}</td><td>${esc(d.cible)}</td><td><b>${fmt(d.total)}</b></td><td>${s?`<span class="tag ${s.cls}">${s.txt}</span>`:'<span class="mut">—</span>'}</td><td>${payBtn(d)}<button class="btn s" onclick="redoc('${d.id}')">PNG</button></td></tr>`}).join('')}</table>${L.length>8?`<p><button class="btn s g" onclick="page='doc';render()">Voir les ${L.length} factures dans Documents</button></p>`:''}</div>`}
 function chartRem(){
   const rs=refunds().concat(role=='lecteur'?[]:apDocs()),N=8,cur=monday(T());
   if(!rs.length)return '';
@@ -401,15 +479,15 @@ function chartRem(){
   const tot={};rs.forEach(r=>tot[r.ent]=(tot[r.ent]||0)+r.amount);
   const top=Object.entries(tot).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x=>x[0]),oth=rs.some(r=>!top.includes(r.ent));
   const ents=[...top,...(oth?['Autres']:[])],col=e=>e=='Autres'?PAL[5]:PAL[top.indexOf(e)];
-  const data=wks.map(m=>{const k=wkey(m),g={};rs.filter(r=>wkey(monday(r.t))==k).forEach(r=>{const e=top.includes(r.ent)?r.ent:'Autres';g[e]=(g[e]||0)+r.amount});return{m,g,t:Object.values(g).reduce((a,b)=>a+b,0)}});
+  const data=wks.map(m=>{const k=wkey(m),g={},ga={};rs.filter(r=>wkey(monday(r.t))==k).forEach(r=>{const e=top.includes(r.ent)?r.ent:'Autres';g[e]=(g[e]||0)+r.amount;if(r.ap)ga[e]=(ga[e]||0)+r.amount});return{m,g,ga,t:Object.values(g).reduce((a,b)=>a+b,0)}});
   const mx=Math.max(1,...data.map(d=>d.t)),a=data[N-1].t,b=data[N-2].t;
   const trend=b?(a>=b?'▲ +':'▼ −')+Math.round(Math.abs(a-b)/b*100)+' % vs la semaine précédente':(a?'Aucun remboursement la semaine précédente':'');
   return `<div class="card"><h3>Remboursements par semaine et par entité</h3>
   <p class="mut" style="margin:0 0 8px">Semaine en cours : <b>${fmt(a)}</b> ${trend}</p>
   <div style="display:flex;gap:8px;align-items:flex-end">${data.map(d=>`<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:190px"><small>${d.t?fmt(d.t):''}</small>
-    <div style="width:70%;height:${Math.round(d.t/mx*150)}px;display:flex;flex-direction:column-reverse;border-radius:4px 4px 0 0;overflow:hidden">${ents.filter(e=>d.g[e]).map(e=>`<div title="${esc(e)} : ${fmt(d.g[e])}" style="flex:${d.g[e]};background:${col(e)}"></div>`).join('')}</div></div>`).join('')}</div>
+    <div style="width:70%;height:${Math.round(d.t/mx*150)}px;display:flex;flex-direction:column-reverse;border-radius:4px 4px 0 0;overflow:hidden">${ents.filter(e=>d.g[e]).map(e=>`<div title="${esc(e)} : ${fmt(d.g[e])}${d.ga[e]?' (dont Cour d\'appel : '+fmt(d.ga[e])+')':''}" style="flex:${d.g[e]};background:${col(e)};position:relative">${d.ga[e]?`<div class="apH" style="position:absolute;left:0;right:0;bottom:0;height:${Math.round(d.ga[e]/d.g[e]*100)}%"></div>`:''}</div>`).join('')}</div></div>`).join('')}</div>
   <div style="display:flex;gap:8px;border-top:1px solid var(--bd);margin-top:2px">${data.map(d=>`<small class="mut" style="flex:1;text-align:center">${String(d.m.getDate()).padStart(2,'0')}/${String(d.m.getMonth()+1).padStart(2,'0')}</small>`).join('')}</div>
-  <p style="margin:10px 0 0">${ents.map(e=>`<span style="margin-right:14px;white-space:nowrap"><span style="display:inline-block;width:11px;height:11px;border-radius:2px;background:${col(e)}"></span> ${esc(e)}</span>`).join('')}</p></div>`}
+  <p style="margin:10px 0 0">${ents.map(e=>`<span style="margin-right:14px;white-space:nowrap"><span style="display:inline-block;width:11px;height:11px;border-radius:2px;background:${col(e)}"></span> ${esc(e)}</span>`).join('')}${rs.some(r=>r.ap)?`<span style="white-space:nowrap"><span class="apH" style="display:inline-block;width:11px;height:11px;border:1px solid var(--mut);background-color:var(--mut)"></span> hachuré = factures Cour d'appel</span>`:''}</p></div>`}
 
 /* ---------- Sélection multiple (1 attestation pour plusieurs amendes · 1 facture pour plusieurs amendes d'une même entité) ---------- */
 const SEL=new Set();let lastPage='';
@@ -441,22 +519,32 @@ function invSel(){const rs=live(selRows());
 
 /* ---------- Pages ---------- */
 const P={
-app(){
-  return `<h2>Facture Cour d'appel</h2><p class="mut">Génère une facture PNG à la suite d'un jugement rendu en appel. Les signatures sont identiques aux autres factures (fondateur toujours ; administrateur en plus s'il la génère). Chaque facture est conservée dans <b>Documents</b>.</p>
+app(){RMP=persons();const td=new Date(T()).toISOString().slice(0,10),rb=ribDef();
+  return `<h2>Cour d'appel</h2><p class="mut">Documents à la suite d'un jugement rendu en appel : une <b>facture</b> (à l'entité ou à la partie concernée) et une <b>attestation de remboursement</b> remise au justiciable. Les signatures sont celles des autres documents (fondateur toujours ; administrateur en plus s'il génère). Chaque document est conservé dans <b>Documents</b>.</p><h3>Facture</h3>
   <form class="card" onsubmit="genApp(event)"><div class="row">
   <div><label>Facturé à *</label>${apO('ap-e',['',...db.ents.map(x=>x.n)].map(x=>x||'— Choisir —'),'Nom de la personne ou de l\'entité')}</div>
   <div><label>N° du jugement</label><input id="ap-r" value="${new Date().toLocaleDateString('fr-FR').replace(/\//g,'')}-…" readonly title="Date du jugement + rang de la facture (-1 première, -2 suivante…), attribué à la génération"></div>
   <div><label>Date du jugement</label><input id="ap-jd" type="date" value="${new Date().toISOString().slice(0,10)}" onchange="apRef()"></div></div>
   <label>Objet</label>${apO('ap-o',["Amendes confirmées suite à un jugement en appel","Remboursement d'amendes suite à un jugement en appel","Frais de procédure suite à un jugement en appel","Dommages et intérêts prononcés en appel"],"Objet de la facture")}
-  <h4>Lignes de la facture</h4><div id="apls"></div><button type="button" class="btn s g" onclick="addApL()">+ Ajouter une ligne</button>
+  <h4>Lignes de la facture</h4><label>Rechercher une amende enregistrée (n°, nom, infraction, entité)</label><input id="aps" placeholder="Ex. : A-0012, Dupont, excès de vitesse…" oninput="apSrch()" autocomplete="off"><div id="apr" style="margin:6px 0 10px"></div><label style="margin-top:8px">Ajouter une infraction à la facture</label>${pkBar('fa',faPartyHtml())}<div id="fal">${pkHtml('fa')}</div>${pkOtherHtml('fa')}
   <p><label style="display:inline"><input type="checkbox" id="ap-pd"> Facture déjà réglée (tampon « PAYÉ »)</label></p>
-  <button class="btn">Générer la facture PNG</button></form>`},
+  <p><label style="display:inline"><input type="checkbox" id="ap-rib" ${rb?'checked':'disabled'}> Afficher le RIB de l'émetteur sur la facture</label>${rb?'':' <span class="mut">(non renseigné : le fondateur doit l\'ajouter dans Paramètres)</span>'}</p>
+  <button class="btn">Générer la facture PNG</button></form>
+  <h3>Attestation de remboursement (justiciable)</h3>${role=='user'?'<div class="card">Réservé aux administrateurs et au fondateur.</div>':`<p class="mut">Atteste que le justiciable a obtenu, par jugement en appel, le remboursement des sommes indiquées. Le document est remis à la personne remboursée.</p>
+  <form class="card" onsubmit="genRem(event)"><div class="row">
+  <div><label>Justiciable *</label><select id="rm-ps" onchange="rmPick()"><option value="">— Choisir —</option>${RMP.map((p,i)=>`<option value="${i}">${esc(p.name)} — ${p.dob?'né(e) le '+bd(p.dob):'date de naissance inconnue'}</option>`).join('')}<option value="__o">➕ Autre…</option></select><input id="rm-pn" placeholder="Nom du justiciable" style="display:none;margin-top:6px"></div>
+  <div><label>Date de naissance</label><input id="rm-n" type="date" min="1900-01-01" max="${td}"></div>
+  <div><label>Date du jugement</label><input id="rm-jd" type="date" value="${td}"></div>
+  <div><label>N° du jugement</label><input id="rm-r" maxlength="40" placeholder="Facultatif"></div></div>
+  <label>Objet</label>${apO('rm-o',["Remboursement d'amendes suite à un jugement en appel","Annulation d'amendes suite à un jugement en appel","Dommages et intérêts prononcés en appel"],"Objet de l'attestation")}
+  <h4>Sommes remboursées</h4>${pkBar('ra')}<div id="ral">${pkHtml('ra')}</div>${pkOtherHtml('ra')}
+  <p><button class="btn">Générer l'attestation PNG</button></p></form>`}`},
 doc(){
   const ds=db.docs.slice().sort((a,b)=>(+b.date||0)-(+a.date||0));
   return `<h2>Historique des documents générés</h2>${role=='fondateur'?'<p><button class="btn s d" onclick="delAllDocs()">Supprimer tous les documents (fondateur)</button></p>':''}<p class="mut">Chaque attestation et chaque facture générée est conservée ici. « Télécharger » régénère l'image PNG telle qu'elle avait été émise (mêmes montants, même numéro).</p>
-  <div class="row" style="margin-bottom:12px"><input id="dq" placeholder="Filtrer (numéro, nom, entité…)" oninput="filtDoc()"><select id="dt" onchange="filtDoc()"><option value="">Tous les types</option><option>Attestation</option><option>Facture</option><option>Facture appel</option></select></div>
-  <div class="card tw"><table id="docT"><tr><th>Date</th><th>Type</th><th>N°</th><th>Pour</th><th>Éléments</th><th>Montant</th><th>Généré par</th><th></th></tr>
-  ${ds.map(d=>`<tr><td>${new Date(+d.date||0).toLocaleString('fr-FR')}</td><td style="white-space:nowrap;min-width:120px"><span hidden>${esc(d.type)}</span>${tag2(d.type)}</td><td>${esc(d.num)}</td><td>${esc(d.cible)}</td><td>${esc(d.nb)}</td><td><b>${fmt(d.total)}</b></td><td>${who(d.cree||'',d.creeGrade)}</td><td><button class="btn s" onclick="redoc('${d.id}')">Télécharger PNG</button>${role=='fondateur'?` <button class="btn s d" onclick="delDoc('${d.id}')">Supprimer</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="mut">Aucun document généré.</td></tr>'}</table></div>`},
+  <div class="row" style="margin-bottom:12px"><input id="dq" placeholder="Filtrer (numéro, nom, entité…)" oninput="filtDoc()"><select id="dt" onchange="filtDoc()"><option value="">Tous les types</option><option>Attestation</option><option>Facture</option><option>Facture appel</option><option>Attestation appel</option></select></div>
+  <div class="card tw"><table id="docT"><tr><th>Date</th><th>Type</th><th>N°</th><th>Pour</th><th>Éléments</th><th>Montant</th><th>Statut</th><th>Généré par</th><th></th></tr>
+  ${ds.map(d=>`<tr><td>${new Date(+d.date||0).toLocaleString('fr-FR')}</td><td style="white-space:nowrap;min-width:120px"><span hidden>${esc(d.type)}</span>${tag2(d.type)}</td><td>${esc(d.num)}</td><td>${esc(d.cible)}</td><td>${esc(d.nb)}</td><td><b>${fmt(d.total)}</b></td><td>${(s=>s?`<span class="tag ${s.cls}">${s.txt}</span>`:'<span class="mut">—</span>')(docSt(d))}</td><td>${who(d.cree||'',d.creeGrade)}</td><td>${payBtn(d)}<button class="btn s" onclick="redoc('${d.id}')">Télécharger PNG</button>${role=='fondateur'?` <button class="btn s d" onclick="delDoc('${d.id}')">Supprimer</button>`:''}</td></tr>`).join('')||'<tr><td colspan="9" class="mut">Aucun document généré.</td></tr>'}</table></div>`},
 rem(){
   GRP=[];AGS=[];const nv=db.contests.filter(c=>c.aVerif&&c.status=='Accepté').length;
   const rs=refunds(),aps=apDocs(),S=l=>l.reduce((a,r)=>a+r.amount,0),tot=S(rs)+apSum(aps)+archT();
@@ -480,13 +568,15 @@ rem(){
 dash(){
   const open=db.contests.filter(c=>ST.indexOf(c.status)<2).length;
   const sc=ST.map(s=>[s,db.contests.filter(c=>c.status==s).length]),mx=Math.max(1,...sc.map(x=>x[1]));
+  const apD=role=='lecteur'?[]:apDocs();
   return `<h2>Tableau de bord</h2><div class="grid">
   <div class="card stat"><b>${db.fines.length}</b><span>Amendes enregistrées</span></div>
-  <div class="card stat"><b>${fmt(refunds().reduce((a,r)=>a+r.amount,0)+archT()+(role=='lecteur'?0:apSum(apDocs())))}</b><span>Montant total remboursé (contestations acceptées${role=='lecteur'?'':' + factures Cour d\'appel'})</span></div>
-  ${role=='lecteur'?'':`<div class="card stat"><b>${fmt(refunds().filter(r=>r.c.pay!='Payé').reduce((a,r)=>a+r.amount,0)+apSum(apDocs().filter(r=>!r.paid)))}</b><span>Restant à réclamer aux entités</span></div>`}
+  <div class="card stat"><b>${fmt(refunds().reduce((a,r)=>a+r.amount,0)+archT()+(role=='lecteur'?0:apSum(apDocs())))}</b><span>Montant total remboursé (contestations acceptées${role=='lecteur'?'':' + factures Cour d\'appel'})</span>${apD.length?`<small class="mut" style="display:block">dont Cour d'appel : <strong>${fmt(apSum(apD))}</strong> (${apD.length} facture${apD.length>1?'s':''})</small>`:''}</div>
+  ${role=='lecteur'?'':`<div class="card stat"><b>${fmt(refunds().filter(r=>r.c.pay!='Payé').reduce((a,r)=>a+r.amount,0)+apSum(apDocs().filter(r=>!r.paid)))}</b><span>Restant à réclamer aux entités</span>${apD.some(r=>!r.paid)?`<small class="mut" style="display:block">dont Cour d'appel : <strong>${fmt(apSum(apD.filter(r=>!r.paid)))}</strong></small>`:''}</div>`}
   <div class="card stat"><b>${db.contests.length}</b><span>Contestations</span></div>
   <div class="card stat"><b>${open}</b><span>À traiter</span></div>
   <div class="card stat"><b>${db.cases.filter(c=>c.offender&&db.contests.some(x=>x.caseId==c.id)).length}</b><span>Dossiers de justiciables</span></div></div>
+  ${invCard()}
   ${chartRem()}
   <div class="card"><h3>Contestations par statut</h3>${sc.map(([s,n])=>`<div style="display:flex;gap:10px;align-items:center;margin:6px 0"><span style="width:100px">${s}</span><div class="bar" style="width:${n/mx*60}%;min-width:4px"></div><b>${n}</b></div>`).join('')}</div>
   <div class="card"><h3>Dernières contestations</h3>${db.contests.slice(-5).reverse().map(c=>`<p>${tag(c.status)} <b>${esc(rf(fine(c.fineId),'fine'))}</b> – ${esc(fine(c.fineId).offender)} <span class="mut">${esc(c.date)}</span></p>`).join('')||'<p class="mut">Aucune contestation.</p>'}</div>`},
@@ -497,8 +587,12 @@ new(){
   return `<h2>${ed?'Modifier la saisie '+esc(rf(ed,'fine')):'Enregistrer une contestation'}</h2><form class="card" onsubmit="${ed?'saveEdit(event)':'addContest(event)'}">
   <div class="row"><div><label>Justiciable *</label><select name="person" onchange="pickPerson(this)">${personOpts(ed)}</select><small class="mut">Déjà enregistré ? Choisissez-le dans la liste pour éviter les doublons.</small></div>
   <div id="np" style="display:contents"><div><label>Nom et prénom *</label><input name="offender" required oninput="hintName(this)" value="${ed?esc(ed.offender):''}"></div><div><label>Date de naissance *</label><input name="dob" type="date" min="1900-01-01" max="${wkey(new Date(T()))}" ${ed&&!ed.dob?'':'required'} value="${ed?esc(ed.dob||''):''}"></div><div id="hn" class="mut" style="grid-column:1/-1;display:none"></div></div>
-  <div><label>Infraction contestée *</label><select name="law" required onchange="pickLaw(this)"><option value="">— Choisir —</option>${ed&&!db.laws.some(l=>l.n==ed.inf&&l.cat==ed.cat)?`<option value="__keep" selected>${esc(ed.inf)} (inchangée)</option>`:''}${cats.map(([c,ls])=>`<optgroup label="${esc(c)}">${ls.map(l=>`<option value="${l.id}" data-a="${esc(l.amount||'')}" ${ed&&l.n==ed.inf&&l.cat==ed.cat?'selected':''}>${esc(l.n)}</option>`).join('')}</optgroup>`).join('')}</select></div>
-  <div><label>Montant de l'amende ($) *</label><input name="amount" type="number" min="0" required value="${ed?esc(ed.amount):''}"></div>
+  ${ed?`<div><label>Infraction contestée *</label><input placeholder="Rechercher une infraction…" oninput="lawSel(this)" autocomplete="off" style="margin-bottom:6px"><select name="law" required onchange="pickLaw(this)"><option value="">— Choisir —</option>${ed&&!db.laws.some(l=>l.n==ed.inf&&l.cat==ed.cat)?`<option value="__keep" selected>${esc(ed.inf)} (inchangée)</option>`:''}${cats.map(([c,ls])=>`<optgroup label="${esc(c)}">${ls.map(l=>`<option value="${l.id}" data-a="${esc(l.amount||'')}" ${ed&&l.n==ed.inf&&l.cat==ed.cat?'selected':''}>${esc(l.n)}</option>`).join('')}</optgroup>`).join('')}</select></div>`:''}
+  ${ed?`<div><label>Montant de l'amende ($) *</label><input name="amount" type="number" min="0" required value="${ed?esc(ed.amount):''}"></div>`:`  <div style="grid-column:1/-1"><label>Infractions contestées * <span id="mlc" class="mut"></span></label>
+  ${pkBar('ml')}
+  <div id="mll">${pkHtml('ml')}</div>
+  <small class="mut">Recherchez une infraction, sélectionnez-la puis cliquez sur « Ajouter infraction ». Le montant est celui défini dans les Paramètres. Pour plusieurs amendes identiques, ajoutez l'infraction autant de fois que nécessaire : une contestation est créée par ligne.</small></div>
+`}
   <div><label>Date des faits *</label><input name="date" type="date" value="${ed?esc(ed.date):wkey(new Date(T()))}" required></div>
   <div><label>Entité ayant appliqué l'amende *</label><select name="ent" required><option value="">— Choisir —</option>${ed&&ed.ent&&!db.ents.some(x=>x.n==ed.ent)?`<option selected>${esc(ed.ent)}</option>`:''}${db.ents.map(x=>`<option ${ed&&x.n==ed.ent?'selected':''}>${esc(x.n)}</option>`).join('')}</select></div>
   <div><label>Agent (facultatif)</label><input name="officer" value="${ed?esc(ed.officer||''):''}"></div></div>
@@ -513,7 +607,7 @@ reg(){
 con(){
   return `<h2>Suivi des contestations</h2><select onchange="filt('conT',this.value)" style="max-width:240px"><option value="">Tous les statuts</option>${ST.map(s=>`<option>${s}</option>`).join('')}</select>
   <div class="card tw" style="margin-top:12px"><table id="conT"><tr><th></th><th>Amende</th><th>Justiciable</th><th>Motif</th><th>Statut</th><th>Dossier</th><th>Décision</th></tr>
-  ${db.contests.slice().reverse().map(c=>{const f=fine(c.fineId);return `<tr><td>${chk(c)}</td><td>${rf(f,'fine')}<br><small>${fmt(f.amount)}</small>${canEdit(f)?`<br><button class="btn s" onclick="editFine('${f.id}')">Modifier</button>`:''}</td><td>${pn(f)}</td><td>${esc(c.motif)}${c.pj?'<br>'+pjLink(c,'📎 Pièce jointe'):''}<br><small class="mut">${esc(c.date)}${c.cree?' · saisi par '+who(c.cree,c.creeGrade):''}${c.par&&c.par!=c.cree?' · modifié par '+who(c.par,c.parGrade):''}</small>${c.pec?'<br><small class="mut">Pris en charge par '+who(c.pec,c.pecGrade)+'</small>':''}</td>
+  ${db.contests.slice().reverse().map(c=>{const f=fine(c.fineId);return `<tr><td>${chk(c)}</td><td><b>${rf(f,'fine')}</b><br>${esc(f.inf)}<br><small class="mut">${esc(f.cat||'')} · ${fmt(f.amount)}</small>${canEdit(f)?`<br><button class="btn s" onclick="editFine('${f.id}')">Modifier</button>`:''}</td><td>${pn(f)}</td><td>${esc(c.motif)}${c.pj?'<br>'+pjLink(c,'📎 Pièce jointe'):''}<br><small class="mut">${esc(c.date)}${c.cree?' · saisi par '+who(c.cree,c.creeGrade):''}${c.par&&c.par!=c.cree?' · modifié par '+who(c.par,c.parGrade):''}</small>${c.pec?'<br><small class="mut">Pris en charge par '+who(c.pec,c.pecGrade)+'</small>':''}</td>
   <td><span hidden>${esc(c.status)}</span><select ${(locked(c)&&role=='user')||(DEC.includes(c.status)&&!canUndo())?'disabled':''} onchange="setStatus('${c.id}',this.value)">${ST.map(s=>`<option ${s==c.status?'selected':''} ${DEC.includes(s)&&s!=c.status&&!canDecide()?'disabled':''}>${esc(s)}</option>`).join('')}</select>${locked(c)?`<br><small class="mut">🔒 ${esc(c.pay)} (verrouillée)</small>`:''}${c.aVerif&&c.status=='Accepté'?'<br><small class="mut">⚠ ancien statut « Réduite » : vérifier le montant remboursé</small>':''}${c.status=='Rejetée'?`<br><small class="mut">Motif du rejet : ${esc(c.rejet||'non renseigné')}</small>`:''}</td>
   <td>${(db.cases.find(d=>d.id==c.caseId)&&rf(db.cases.find(d=>d.id==c.caseId),'case'))||'—'}</td>
   <td><input value="${esc(c.decision||'')}" placeholder="Décision…" onchange="upd('${c.id}','decision',this.value)">${c.status=='Accepté'?`<br><small class="mut">Validé par ${who(c.val||c.pec||'—',c.valGrade||c.pecGrade)}</small><br><small class="mut">Décision du ${role=='user'?dfr(new Date(+c.dateDec||+c.upd||0)):`<input type="date" style="width:auto;padding:2px 4px" value="${wkey(new Date(+c.dateDec||+c.upd||0))}" onchange="setDateDec('${c.id}',this.value)">`}${c.dateDec?'':' (approx.)'}</small><br><button class="btn s" style="margin-top:4px" onclick="attC('${c.id}')">Attestation PNG</button>`:''}</td></tr>`}).join('')}</table></div>`},
@@ -560,12 +654,14 @@ set(){
   <label>URL du script Google Apps Script (synchro Google Sheet)</label><input name="url" value="${esc(db.cfg.url)}" placeholder="https://script.google.com/macros/s/…/exec">
   <button class="btn">Enregistrer</button></form>
   <div class="card"><h3>Liste des infractions</h3><form onsubmit="addLaw(event)" class="row"><div><label>Catégorie</label><select name="cat">${CATS.map(c=>`<option>${c}</option>`).join('')}</select></div><div><label>Infraction *</label><input name="n" required></div><div><label>Montant par défaut ($)</label><input name="amount" type="number" min="0"></div><div><label>&nbsp;</label><button class="btn" style="margin:0">Ajouter</button></div></form>
-  ${CATS.map(c=>{const ls=db.laws.filter(l=>l.cat==c);return ls.length?`<h4>${c}</h4>`+ls.map(l=>`<p>${esc(l.n)} <span class="mut">${l.amount?fmt(l.amount):''}</span> <button class="btn s d" onclick="delLaw('${l.id}')">✕</button></p>`).join(''):''}).join('')}</div>
+  <input id="lq" placeholder="Rechercher une infraction (nom ou catégorie)…" oninput="lawFilt()" autocomplete="off" style="margin:12px 0 4px">
+  <div id="lb">${CATS.map(c=>{const ls=db.laws.filter(l=>l.cat==c);return ls.length?`<div class="lg"><h4>${c}</h4>`+ls.map(l=>`<p class="lr" data-n="${esc(nk(l.n+' '+c))}">${esc(l.n)} <span class="mut">${l.amount?fmt(l.amount):''}</span> <button class="btn s d" onclick="delLaw('${l.id}')">✕</button></p>`).join('')+`</div>`:''}).join('')}</div><p id="l0" class="mut" style="display:none">Aucune infraction ne correspond à la recherche.</p></div>
   <div class="card"><h3>Entités appliquant les amendes</h3><form onsubmit="addEnt(event)" class="row"><div><label>Nom de l'entité *</label><input name="n" required></div><div><label>&nbsp;</label><button class="btn" style="margin:0">Ajouter</button></div></form>
   ${db.ents.map(x=>`<p>${esc(x.n)} <span class="mut">(${db.fines.filter(f=>f.ent==x.n).length} amende(s))</span> <button class="btn s" onclick="renEnt('${x.id}')">Renommer / fusionner</button> <button class="btn s d" onclick="delEnt('${x.id}')">✕</button></p>`).join('')||'<p class="mut">Aucune entité.</p>'}</div>
   ${ghosts()}
   <div class="card"><h3>Motifs de rejet prédéfinis</h3><p class="mut">Proposés dans une liste lorsqu'une contestation est rejetée (une précision libre reste possible).</p><form onsubmit="addMotif(event)" class="row"><div><label>Nouveau motif *</label><input name="n" required maxlength="120"></div><div><label>&nbsp;</label><button class="btn" style="margin:0">Ajouter</button></div></form>
   ${db.motifs.slice().sort((a,b)=>String(a.n).localeCompare(String(b.n))).map(m=>`<p>${esc(m.n)} <button class="btn s d" onclick="delMotif('${m.id}')">✕</button></p>`).join('')||'<p class="mut">Aucun motif.</p>'}</div>
+  ${ribCard()}
   <form class="card" onsubmit="savePrefs(event)"><h3>Nom des identifiants</h3><p class="mut">Seul le préfixe change, le numéro reste inchangé (lettres/chiffres, mis en majuscules).</p>
   <div class="row"><div><label>Préfixe des amendes</label><input name="fine" value="${esc(pre('fine'))}" maxlength="10"></div><div><label>Préfixe des dossiers</label><input name="case" value="${esc(pre('case'))}" maxlength="10"></div></div>
   <p class="mut">Aperçu : ${esc(pre('fine'))}-0001 · ${esc(pre('case'))}-0001</p><button class="btn">Enregistrer</button></form>
@@ -588,26 +684,70 @@ acc(){
   ${role=='fondateur'?`<div class="card"><b>Code de déblocage du fondateur</b> <span class="tag ${(accs.find(x=>x.role=='fondateur')||{}).recup?'ok':'ko'}">${(accs.find(x=>x.role=='fondateur')||{}).recup?'Défini':'Non défini'}</span><p class="mut" style="margin:6px 0">Si votre compte est bloqué (5 codes incorrects), saisissez ce code à la place du code personnel puis cliquez sur « Code de déblocage » à la connexion. Il n'est affiché qu'une fois : en générer un nouveau annule l'ancien.</p><button class="btn s" onclick="genRec()">Générer un nouveau code de déblocage</button></div>`:''}<div class="card tw"><table><tr><th>Identifiant</th><th>Nom</th><th>Rôle</th><th>Grade</th><th>Tampon</th><th>État</th><th>Dernier accès</th><th></th></tr>${accs.map(x=>{const f=x.role=='fondateur',s=String(x.login).toLowerCase()==String(meL).toLowerCase(),lockA=x.role=='admin'&&role!='fondateur'&&!s;return `<tr><td>${esc(x.login)}</td><td>${esc(x.nom)}</td><td>${RL[x.role]||x.role}</td><td>${esc(x.grade||'—')}</td><td>${stampCell(x.login,!(f&&!s))}</td><td>${x.actif=='non'?'<span class="tag ko">Désactivé</span>':'<span class="tag ok">Actif</span>'}${x.bloque?' <span class="tag ko">🔒 Bloqué</span>':''}</td><td class="mut">${x.last?fmtDt(x.last):'—'}</td><td>${(f&&!s)||lockA?'':`<button class="btn s" onclick="editAcc('${esc(x.login)}')">Modifier</button>`}${x.role=='lecteur'?` <button class="btn s" onclick="editClients('${esc(x.login)}')">Clients (${(x.clients||[]).length})</button>`:''}${x.bloque&&!f&&!lockA&&!s?` <button class="btn s" onclick="unlockAcc('${esc(x.login)}')">Débloquer</button>`:''}${f||lockA?'':` <button class="btn s g" onclick="codeAcc('${esc(x.login)}','${x.role}')">Nouveau code</button>`}${f||s||lockA?'':` <button class="btn s ${x.actif=='non'?'':'d'}" onclick="toggleAcc('${esc(x.login)}')">${x.actif=='non'?'Réactiver':'Désactiver'}</button>`}${x.actif=='non'&&!f&&!s&&!lockA?` <button class="btn s d" onclick="delAcc('${esc(x.login)}')">Supprimer</button>`:''}</td></tr>`}).join('')}</table></div>`},
 help(){
   return `<h2>Mode d'emploi</h2><div class="card"><ol>
-  <li><b>Enregistrer une contestation</b> : choisissez le justiciable dans la liste (ou créez-le avec son nom et sa <b>date de naissance</b> : deux homonymes nés à des dates différentes sont deux dossiers distincts ; les dossiers anciens sans date se complètent depuis la page Dossiers), choisissez l'infraction dans la liste (classée par catégorie), indiquez l'entité qui a appliqué l'amende (obligatoire) et, si besoin, l'agent (facultatif), vérifiez le montant et saisissez le motif. L'amende et sa contestation sont créées ensemble.</li>
+  <li><b>Enregistrer une contestation</b> : choisissez le justiciable dans la liste (ou créez-le avec son nom et sa <b>date de naissance</b> : deux homonymes nés à des dates différentes sont deux dossiers distincts ; les dossiers anciens sans date se complètent depuis la page Dossiers), recherchez l'infraction par son nom puis cliquez sur « Ajouter infraction » (le montant est celui défini dans les Paramètres ; une contestation est créée par ligne de la liste), indiquez l'entité qui a appliqué l'amende (obligatoire) et, si besoin, l'agent (facultatif), vérifiez le montant et saisissez le motif. L'amende et sa contestation sont créées ensemble.</li>
   <li><b>Registre</b> : retrouvez toutes les amendes contestées et recherchez-les.</li>
   <li><b>Contestations</b> : changez le statut (En attente, En cours d'instruction, Accepté ou Rejetée ; un rejet exige un motif), notez la décision et rattachez l'affaire à un dossier.</li>
   <li><b>Dossiers</b> : un dossier est créé automatiquement pour chaque justiciable dès sa première contestation. Il regroupe tout son historique (nombre de contestations, acceptées, rejetées, en cours) et signale les justiciables récurrents (3 contestations ou plus).</li>
   <li><b>Entités</b> : suivi par agence. Le tableau liste chaque entité avec ses amendes, contestations (acceptées, rejetées, en cours), taux d'acceptation, montant remboursé et reste dû. « Détail » ouvre la fiche de l'entité : suivi par agent et par infraction, liste de toutes ses amendes avec leur statut de contestation et de paiement, et facture du reste dû. Les entités se créent dans Paramètres ; une amende dont l'entité n'est pas renseignée apparaît sous « Entité non renseignée ».</li>
   <li><b>Paramètres</b> : réservés à l'administrateur. Vous y gérez la liste des infractions (contravention, délit mineur, délit majeur, crime, crime fédéral), les entités et le préfixe des numéros (ex. AMD-0001) et collez l'URL du script Google pour activer la synchronisation.</li>
   <li><b>Blocage</b> : après 5 codes incorrects, le compte est bloqué 10 minutes. Un administrateur peut le débloquer tout de suite (Comptes › Débloquer ; pour un administrateur, seul le fondateur). Le fondateur, lui, utilise son code de déblocage (bouton sur l'écran de connexion). Les blocages et déblocages sont dans l'Historique.</li>
-  <li><b>Cour d'appel</b> : les factures d'appel sont comptées dans les totaux (tableau de bord, Remboursements, graphique, export CSV) ; marquez-les « Payé » dans Remboursements. La page « Cour d'appel » génère une facture PNG à la suite d'un jugement en appel (facturé à, n° et date du jugement, lignes avec montants). Signatures identiques aux autres factures ; la facture est conservée dans Documents (type « Facture appel »).</li>
+  <li><b>Cour d'appel</b> : les factures d'appel sont comptées dans les totaux (tableau de bord, Remboursements, graphique, export CSV) ; marquez-les « Payé » depuis le tableau de bord (carte « Factures émises »), Documents ou Remboursements ; les factures d'appel sont repérées par une étiquette violette « Facture appel » et hachurées dans le graphique. La page « Cour d'appel » génère une facture PNG à la suite d'un jugement en appel (facturé à, n° et date du jugement, lignes avec montants). Signatures identiques aux autres factures ; la facture est conservée dans Documents (type « Facture appel »). La même page génère une <b>attestation de remboursement</b> PNG pour le justiciable (justiciable et date de naissance, n° et date du jugement, sommes remboursées), conservée dans Documents (type « Attestation appel »). Le <b>RIB de l'émetteur</b> se renseigne dans Paramètres (fondateur) : il s'imprime sur toutes les factures à régler.</li>
   <li><b>Connexion</b> : chaque personne a son propre compte (identifiant + code) et peut changer son code avec « Mon code ». Rôles : <b>Utilisateur</b> (tout sauf Paramètres), <b>Administrateur</b> (Paramètres, Historique et gestion des Comptes en plus), <b>Fondateur</b> (administrateur dont le compte ne peut être modifié par personne d'autre). Chaque compte peut avoir un grade (Superviseur, Juge, Procureur, Avocat) affiché à côté du nom. La première personne qui fait passer une contestation de « En attente » à un autre statut en est inscrite comme prenant en charge.</li><li><b>Remboursements</b> : montants rendus (contestations acceptées) par semaine et par entité, avec le statut « En attente de réclamation », « Facturé » (automatique dès que la facture est générée) ou « Payé ». Les boutons « Facture PNG » et « Attestation PNG » génèrent une image à envoyer (la facture à l'entité, l'attestation au justiciable). Le magistrat qui a fait passer la contestation à « Accepté » est inscrit comme validateur : son « Nom affiché » doit donc être « Prénom Nom » et son grade renseigné.</li><li><b>Création de compte</b> : on saisit le prénom et le nom de famille ; l'identifiant est généré automatiquement (ex. « Jean Dupont » → jean.dupont, avec un numéro si déjà pris) et le nom affiché devient « Prénom Nom ». L'identifiant ne change plus ensuite.</li><li><b>Motifs de rejet</b> : un administrateur définit dans Paramètres une liste de motifs ; au moment d'un rejet, on choisit un motif dans la liste et on peut y ajouter une précision.</li><li><b>Verrouillage</b> : une contestation « Facturé » ou « Payé » ne peut plus changer de statut (ni de date de décision, ni voir sa facturation annulée) sans un administrateur, qui doit confirmer ; la modification est inscrite dans l'Historique. <b>Date de décision</b> : dans la page Contestations, un administrateur peut corriger la date d'une contestation acceptée (« approx. » = date estimée pour les anciennes). Le tableau de bord affiche un graphique des remboursements par semaine et par entité.</li><li><b>Documents</b> : l'historique de toutes les attestations et factures générées (qui, quand, pour qui, montant). Un clic sur « Télécharger PNG » régénère l'image à l'identique.</li><li><b>Tampons</b> : chaque personne peut importer son tampon (PNG à fond transparent) avec « Mon tampon » ; un administrateur peut aussi le faire pour un autre compte dans la page Comptes. Le tampon du magistrat qui a validé la contestation est apposé sur l'attestation.</li><li><b>Premier accès</b> : un compte créé par un administrateur (ou dont le code a été réinitialisé) reçoit un code provisoire ; à la première connexion, la personne doit choisir son propre code avant d'accéder à quoi que ce soit. <b>Consultation</b> : rôle réservé aux avocats, qui peuvent consulter le tableau de bord, le registre, les contestations et les dossiers, sans rien modifier (le script refuse toute écriture). Dans « Comptes », le bouton « Clients » lie l'avocat à des dossiers : il ne voit que les dossiers de ses clients, avec leurs amendes et contestations (sans les données de facturation).</li><li><b>Session</b> : votre code n'est envoyé qu'à la connexion ; ensuite un jeton temporaire (valable 6 h d'inactivité) identifie votre poste. Se déconnecter, changer son code ou être désactivé ferme la session immédiatement.</li><li><b>Modifier une saisie</b> : bouton « Modifier » dans le registre ou les contestations. Un utilisateur ne modifie que ce qu'il a créé (et jamais une contestation acceptée, facturée ou payée) ; un administrateur ou le fondateur modifie tout. Chaque modification est notée dans l'Historique. <b>Pièce jointe</b> : champ facultatif du formulaire, à remplir avec un lien https:// (Drive, capture en ligne…) ; elle s'affiche en 📎.</li><li><b>Connexion</b> : l'œil affiche le code ; « Se souvenir de mon identifiant » mémorise l'identifiant (jamais le code) ; un avertissement s'affiche si Verr. Maj est activé. Le fondateur peut publier un <b>message d'annonce</b> (Paramètres) visible sur l'écran de connexion et en haut de l'application.</li><li><b>Suppressions</b> : un utilisateur ne supprime que ce qu'il a lui-même créé, et jamais une contestation acceptée, facturée ou payée ; un administrateur supprime tout (noté dans l'Historique). <b>Archivage</b> (Paramètres) : déplace les contestations payées depuis plus de 6 mois vers des onglets d'archives du Sheet ; leurs montants restent comptés dans les totaux (ligne « Archivé »). <b>Heure</b> : tous les postes s'alignent sur l'heure du serveur à la connexion.</li><li><b>Décisions et comptes</b> : seuls les comptes de grade Juge, Procureur ou Superviseur (et le fondateur) peuvent passer une contestation à « Accepté » ou « Rejetée » ; un magistrat ou un administrateur peut annuler une décision. Dans Comptes, « Désactiver » bloque la connexion ; un compte désactivé propose alors « Réactiver » ou « Supprimer » (suppression définitive, avec confirmation, impossible pour soi-même et pour le fondateur). Seul le fondateur crée, modifie, désactive, supprime ou réinitialise le code d'un compte administrateur.</li><li><b>Historique</b> : journal des actions (qui, quand, quoi), visible par les administrateurs.</li><li><b>Thème</b> : bouton Jour/Nuit en haut à droite.</li></ol>
   <p class="mut">Synchronisation : chaque modification est envoyée au Google Sheet ; les données sont rechargées toutes les minutes.</p></div>`}
 };
 
 /* ---------- Actions ---------- */
-async function addContest(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),l=db.laws.find(x=>x.id==f.law),id=uid('f'),nm=f.offender.trim(),dob=f.dob||'';
+async function addContest(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),nm=f.offender.trim(),dob=f.dob||'';
+  const sel=PK.ml.l.map(x=>{const l=db.laws.find(y=>y.id==x.lid);return{l,raw:x.amount,m:l&&l.amount!==''&&l.amount!=null&&+l.amount>=0&&String(l.amount)!==''?+l.amount:+x.amount}}).filter(x=>x.l);
+  if($('#mlq')&&$('#mlq').value.trim()){toast('Cliquez sur « Ajouter infraction » pour valider l\'infraction recherchée (ou videz la recherche)');return}
+  if(!sel.length){toast('Ajoutez au moins une infraction (bouton « Ajouter infraction »)');return}
+  if(sel.some(x=>x.raw===''&&!(x.l.amount>=0&&String(x.l.amount)!=='')||!isFinite(x.m)||x.m<0)){toast('Montant manquant : saisissez le montant des infractions sans montant défini');return}
   if(f.pj&&!safeUrl(f.pj)){toast('Lien de pièce jointe invalide (adresse https://…)');return}
   if(!await chkHomonym(nm,dob,f.person))return;
-  const did=caseFor(nm,dob);
-  db.fines.push({id,ref:nextRef(),offender:nm,dob,inf:l.n,cat:l.cat,amount:+f.amount,date:f.date,officer:f.officer,ent:f.ent,upd:T()});
-  db.contests.push({id:uid('c'),fineId:id,motif:f.motif,pj:safeUrl(f.pj),status:ST[0],caseId:did,decision:'',date:f.date,upd:T()});
-  toast('Contestation enregistrée');page='con';save()}
+  const did=caseFor(nm,dob);let n=0;
+  sel.forEach(x=>{{const id=uid('f');
+    db.fines.push({id,ref:nextRef(),offender:nm,dob,inf:x.l.n,cat:x.l.cat,amount:x.m,date:f.date,officer:f.officer,ent:f.ent,upd:T()});
+    db.contests.push({id:uid('c'),fineId:id,motif:f.motif,pj:safeUrl(f.pj),status:ST[0],caseId:did,decision:'',date:f.date,upd:T()});n++}});
+  pkReset('ml');toast(n+' contestation'+(n>1?'s enregistrées':' enregistrée'));page='con';save()}
+const PK={};const pkR=ns=>PK[ns]||(PK[ns]={l:[],sel:'',hi:-1}),pkReset=ns=>{PK[ns]={l:[],sel:'',hi:-1}};['ml','fa','ra'].forEach(pkR);
+const hasAmt=l=>l.amount!==''&&l.amount!=null&&String(l.amount)!=='';
+const lawMatch=q=>{const k=nk(q||'').split(' ').filter(Boolean);return db.laws.filter(l=>{const t=nk(l.n+' '+l.cat);return k.every(w=>t.includes(w))}).sort((a,b)=>CATS.indexOf(a.cat)-CATS.indexOf(b.cat)||a.n.localeCompare(b.n))};
+const pkBar=(ns,pre='')=>`<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">${pre}<div style="position:relative;flex:2;min-width:240px"><input id="${ns}q" placeholder="Rechercher une infraction (nom ou catégorie)…" oninput="pkSug('${ns}',true)" onfocus="pkSug('${ns}')" onblur="setTimeout(()=>pkHide('${ns}'),150)" onkeydown="pkKey('${ns}',event)" autocomplete="off" style="margin:0"><div id="${ns}s" class="mls" hidden></div></div><button type="button" class="btn" style="margin:0" onclick="pkAdd('${ns}')">+ Ajouter infraction</button></div>`;
+function pkHide(ns){const b=$('#'+ns+'s');if(b)b.hidden=true;pkR(ns).hi=-1}
+function pkSug(ns,typed){const i=$('#'+ns+'q'),b=$('#'+ns+'s');if(!i||!b)return;const S=pkR(ns);if(typed)S.sel='';
+  const L=lawMatch(i.value).slice(0,60);S.hi=-1;
+  if(!L.length){b.innerHTML='<div class="mlh">Aucune infraction ne correspond</div>';b.hidden=false;return}
+  let cat='',h='';L.forEach(l=>{if(l.cat!=cat){cat=l.cat;h+=`<div class="mlh">${esc(cat)}</div>`}h+=`<div class="mli" data-id="${l.id}" onmousedown="event.preventDefault();pkPick('${ns}','${l.id}')"><span>${esc(l.n)}</span><span class="mut">${hasAmt(l)?fmt(l.amount):'montant à saisir'}</span></div>`});
+  b.innerHTML=h;b.hidden=false}
+function pkPick(ns,id){const l=db.laws.find(x=>x.id==id);if(!l)return;pkR(ns).sel=id;$('#'+ns+'q').value=l.n;pkHide(ns)}
+function pkKey(ns,e){const S=pkR(ns),b=$('#'+ns+'s'),it=b?[...b.querySelectorAll('.mli')]:[];
+  if(e.key=='ArrowDown'||e.key=='ArrowUp'){e.preventDefault();if(b.hidden)pkSug(ns);const n=b.querySelectorAll('.mli').length;if(!n)return;S.hi=(S.hi+(e.key=='ArrowDown'?1:-1)+n)%n;b.querySelectorAll('.mli').forEach((x,k)=>{x.classList.toggle('hi',k==S.hi);if(k==S.hi)x.scrollIntoView({block:'nearest'})})}
+  else if(e.key=='Enter'){e.preventDefault();if(S.hi>=0&&it[S.hi])pkPick(ns,it[S.hi].dataset.id);pkAdd(ns)}
+  else if(e.key=='Escape')pkHide(ns)}
+function pkAdd(ns){const i=$('#'+ns+'q');if(!i)return;const S=pkR(ns);let l=S.sel&&db.laws.find(x=>x.id==S.sel&&x.n==i.value);
+  if(!l){const m=lawMatch(i.value),ex=m.filter(x=>nk(x.n)==nk(i.value));l=ex.length==1?ex[0]:m.length==1?m[0]:null}
+  if(!l){toast(i.value.trim()?'Choisissez une infraction dans la liste proposée':'Recherchez puis choisissez une infraction');pkSug(ns);i.focus();return}
+  S.l.push({lid:l.id,n:l.n,cat:l.cat,amount:hasAmt(l)?+l.amount:'',fixed:hasAmt(l),p:ns=='fa'?faParty():'',custom:false});S.sel='';i.value='';pkHide(ns);pkRender(ns);i.focus()}
+function pkDel(ns,k){pkR(ns).l.splice(k,1);pkRender(ns)}
+function pkHtml(ns){const S=pkR(ns),tot=S.l.reduce((a,x)=>a+(+x.amount||0),0);
+  return S.l.length?S.l.map((x,k)=>{const l=x.lid&&db.laws.find(y=>y.id==x.lid),nm=x.n||(l?l.n:'(infraction supprimée)'),cat=x.cat||(l?l.cat:'');
+    return `<div class="mlrow"><span class="mut">${k+1}.</span><div class="nm"><b>${esc(nm)}</b><br><small class="mut">${esc(cat)}${x.p?(cat?' · ':'')+'Justiciable : '+esc(x.p):''}${x.custom?(cat||x.p?' · ':'')+'hors liste':''}</small></div>${x.fixed?`<span class="pr">${fmt(x.amount)}</span>`:`<input type="number" min="0" placeholder="Montant ($)" value="${esc(x.amount)}" oninput="PK['${ns}'].l[${k}].amount=this.value;pkTot('${ns}')" aria-label="Montant ($)">`}<button type="button" class="btn s d" onclick="pkDel('${ns}',${k})" aria-label="Retirer">✕</button></div>`}).join('')+`<div class="mltot"><span>${S.l.length} ${ns=='ml'?'amende':'ligne'}${S.l.length>1?'s':''}</span><span id="${ns}t">${fmt(tot)}</span></div>`
+  :'<p class="mut" style="margin:8px 0 0">Aucune infraction ajoutée.</p>'}
+function pkTot(ns){const t=$('#'+ns+'t');if(t)t.textContent=fmt(pkR(ns).l.reduce((a,x)=>a+(+x.amount||0),0))}
+function pkRender(ns){const d=$('#'+ns+'l'),n=pkR(ns).l.length;if(d)d.innerHTML=pkHtml(ns);const c=$('#'+ns+'c');if(c)c.textContent=n?'('+n+' ajoutée'+(n>1?'s':'')+')':''}
+const pkOtherHtml=ns=>`<p style="margin:8px 0 0"><a href="#" style="color:var(--ac);font-weight:600" onclick="pkOther('${ns}');return false">Infraction absente de la liste ? Saisir une autre infraction</a></p><div id="${ns}o" class="card" style="display:none;margin:8px 0"><div class="row"><div><label>Désignation *</label><input id="${ns}on" maxlength="120"></div>${ns=='fa'?`<div><label>Catégorie</label><select id="${ns}oc">${CATS.map(c=>`<option>${esc(c)}</option>`).join('')}</select></div>`:''}<div><label>Montant ($) *</label><input id="${ns}om" type="number" min="1" step="1"></div></div>${ns=='fa'?`<label style="display:block"><input type="checkbox" id="${ns}os" checked> Ajouter cette infraction à la liste des infractions (Paramètres)</label>`:''}<button type="button" class="btn s" style="margin-top:8px" onclick="pkAddOther('${ns}')">Ajouter cette ligne</button></div>`;
+function pkOther(ns){const o=$('#'+ns+'o');o.style.display=o.style.display=='none'?'':'none';if(o.style.display=='')$('#'+ns+'on').focus()}
+function pkAddOther(ns){const n=($('#'+ns+'on').value||'').trim(),m=Math.round(+$('#'+ns+'om').value||0);
+  if(!n){toast('Indiquez la désignation de l\'infraction');return}if(m<=0||m>1e9){toast('Indiquez un montant valide');return}
+  pkR(ns).l.push({lid:'',n,cat:ns=='fa'?$('#'+ns+'oc').value:'',amount:m,fixed:true,p:ns=='fa'?faParty():'',custom:true,save:ns=='fa'&&$('#'+ns+'os').checked});
+  $('#'+ns+'on').value='';$('#'+ns+'om').value='';$('#'+ns+'o').style.display='none';pkRender(ns)}
+const faPartyHtml=()=>`<div style="flex:1;min-width:200px"><select id="fa-ps" onchange="faPar(this)" style="margin:0"><option value="">— Justiciable (facultatif) —</option>${[...new Set(db.cases.map(c=>String(c.offender||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(n=>`<option>${esc(n)}</option>`).join('')}<option value="__o">➕ Autre…</option></select><input id="fa-p" placeholder="Nom du justiciable" style="display:none;margin-top:6px"></div>`;
+function faPar(sel){const i=$('#fa-p');i.style.display=sel.value=='__o'?'':'none';if(sel.value=='__o')i.focus()}
+function faParty(){const s=$('#fa-ps');return s?(s.value=='__o'?($('#fa-p').value||'').trim():s.value):''}
+function lawFilt(){const q=nk($('#lq').value);let n=0;document.querySelectorAll('#lb .lr').forEach(r=>{const v=!q||q.split(' ').every(w=>r.dataset.n.includes(w));r.style.display=v?'':'none';if(v)n++});
+  document.querySelectorAll('#lb .lg').forEach(g=>g.style.display=[...g.querySelectorAll('.lr')].some(r=>r.style.display!='none')?'':'none');$('#l0').style.display=n?'none':''}
+function lawSel(i){const q=nk(i.value).split(' ').filter(Boolean),s=i.nextElementSibling;[...s.options].forEach(o=>{if(!o.value)return;const t=nk(o.textContent+' '+(o.parentNode.label||''));const v=o.selected||q.every(w=>t.includes(w));o.hidden=!v;o.disabled=!v});
+  [...s.querySelectorAll('optgroup')].forEach(g=>g.hidden=![...g.querySelectorAll('option')].some(o=>!o.hidden))}
 function pickLaw(s){const a=s.selectedOptions[0].dataset.a;if(a)s.form.amount.value=a}
 function addLaw(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));db.laws.push({id:uid('l'),cat:f.cat,n:f.n.trim(),amount:f.amount,upd:T()});save()}
 function kill(k,id){db[k]=db[k].filter(x=>x.id!=id);db.tomb.push({id,upd:T()})}
@@ -688,9 +828,14 @@ async function renEnt(id){const x=db.ents.find(e=>e.id==id);if(!x)return;
 async function delEnt(id){const x=db.ents.find(e=>e.id==id),k=x?db.fines.filter(f=>f.ent==x.n).length:0;
   if(k&&!await dlg({msg:'« '+x.n+' » est utilisée par '+k+' amende(s). Elle restera visible dans « Entités à régulariser ». Supprimer quand même ?',ok:'Supprimer',danger:true}))return;
   kill('ents',id);save()}
+const ribCard=()=>{const rb=ribRaw();
+  if(role=='fondateur')return `<form class="card" onsubmit="saveRib(event)"><h3>RIB de l'émetteur (factures)</h3><p class="mut">Imprimé sur toutes les factures à régler, avec la mention « Règlement par virement ». Seul le fondateur peut le modifier.</p><div class="row"><div><label>RIB *</label><input name="r" value="${esc(rb.r)}" maxlength="100" placeholder="Ex. : KJ1HVB9TPZ"></div></div><button class="btn">Enregistrer le RIB</button> <button type="button" class="btn g" onclick="saveRib(null)">Effacer</button></form>`;
+  return `<div class="card"><b>RIB de l'émetteur</b> : ${ribDef()?'<span class="tag ok">défini</span>':'<span class="tag ko">non défini</span>'} <span class="mut">— modifiable uniquement par le fondateur.</span></div>`};
+function saveRib(e){if(e)e.preventDefault();if(role!='fondateur')return;const f=e?Object.fromEntries(new FormData(e.target)):{};
+  db.prefs=db.prefs.filter(p=>p.id!='rib');db.prefs.push({id:'rib',v:JSON.stringify({t:'',r:(f.r||'').trim(),b:''}),upd:T()});toast((f.r||'').trim()?'RIB enregistré':'RIB effacé');save()}
 function savePrefs(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
   [['fine',f.fine],['case',f.case]].forEach(([id,v])=>{v=v.trim().toUpperCase().replace(/[^A-Z0-9]/g,'')||(id=='fine'?'A':'D');db.prefs=db.prefs.filter(p=>p.id!=id);db.prefs.push({id,v,upd:T()})});toast('Identifiants enregistrés');save()}
-const APPV='22';let LASTSEEN=0,EXPIRED=false,LOCKT=null,LOCKI=null,ANN='';
+const APPV='26';let LASTSEEN=0,EXPIRED=false,LOCKT=null,LOCKI=null,ANN='';
 const loginView=()=>{const rem=localStorage.cs_rem||(EXPIRED?sessionStorage.cs_login||'':'');return `<div class="logbox"><img class="seal" src="${LOGO_SRC}" alt=""><h1>${esc(db.cfg.court||'Cour Suprême')}</h1><p class="mut" style="margin:4px 0 14px">Accès réservé aux membres de la Cour</p>
   ${EXPIRED?'<p class="tag w" style="display:block;padding:8px;margin:0 0 12px">⏱ Votre session a expiré : reconnectez-vous.</p>':''}
   <form class="card logc" onsubmit="doLogin(event)" style="text-align:left"><label>Identifiant</label><input name="login" ${rem?'':'autofocus'} required autocomplete="username" value="${esc(rem)}">
@@ -800,7 +945,7 @@ function filtDoc(){const q=$('#dq').value.toLowerCase(),t=$('#dt').value.toLower
 function filt(id,v){v=v.toLowerCase();document.querySelectorAll('#'+id+' tr').forEach((r,i)=>{if(i)r.style.display=r.textContent.toLowerCase().includes(v)||[...r.querySelectorAll('select')].some(s=>s.value.toLowerCase()==v)?'':'none'})}
 
 function render(){
-  if(page!=lastPage){SEL.clear();lastPage=page}
+  if(page!=lastPage){SEL.clear();lastPage=page;if(page!='new')pkReset('ml');if(page!='app'){pkReset('fa');pkReset('ra')}}
   $('#ttl').textContent='⚖ '+db.cfg.court;
   $('#who').textContent=role?'👤 '+(me.nom||sessionStorage.cs_login)+(me.grade?' · '+me.grade:'')+' ('+RL[role]+')':'';
   $('#prof').style.display=role&&role!='user'&&role!='lecteur'?'':'none';$('#stp').style.display=role&&role!='lecteur'?'':'none';['bsync','bcode','bout'].forEach(i=>$('#'+i).style.display=role?'':'none');if(!role)$('#sync').textContent=''; // pas de boutons de session sur l'écran de connexion
@@ -812,7 +957,7 @@ function render(){
   $('#main').innerHTML=lec&&!has&&page!='help'
     ?`<h2>Aucune affaire en cours</h2><div class="card"><p>Aucune affaire en cours actuellement.</p><p class="mut">Les dossiers de vos clients apparaîtront ici dès qu'ils vous seront attribués. La page se met à jour automatiquement (environ chaque minute).</p><button class="btn g" onclick="pull(true)">Actualiser maintenant</button></div>`
     :old+(lec&&has&&page=='dash'&&!db.contests.some(c=>ST.indexOf(c.status)<2)?'<div class="card">Aucune affaire en cours actuellement : toutes les contestations de vos clients ont été jugées.</div>':'')+P[page]();
-  $('#main').className=lec?'ro':'';if(page=='app'&&$('#apls')&&!$('#apls').children.length)addApL();selBar();
+  $('#main').className=lec?'ro':'';selBar();
 }
 migr();render();if(sessionStorage.cs_tok&&db.cfg.url)resume();
 </script>
