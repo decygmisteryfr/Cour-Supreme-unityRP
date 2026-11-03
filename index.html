@@ -281,17 +281,28 @@ function seals(g,W){ /* sceau de part et d'autre de l'en-tête */
 const COL={ac:'#14284b',gold:'#b8923a',tx:'#1c1b22',mut:'#6b6a75',bd:'#ddd6c8',bg:'#faf7f0',ok:'#2f7d4f'};
 const FS='Georgia, "Times New Roman", serif';
 function fit(g,t,mw){t=String(t==null?'':t);if(g.measureText(t).width<=mw)return t;while(t.length>1&&g.measureText(t+'…').width>mw)t=t.slice(0,-1);return t+'…'}
-function wrapT(g,t,x,y,mw,lh){let l='';String(t).split(' ').forEach(w=>{const n=l?l+' '+w:w;if(l&&g.measureText(n).width>mw){g.fillText(l,x,y);y+=lh;l=w}else l=n});if(l){g.fillText(l,x,y);y+=lh}return y}
-function paint(draw,name){const W=1240; // mise en page sur 1240 unités ; image jusqu'à 2x (2480 px), réduite automatiquement pour les documents très longs (limite de taille d'image des téléphones)
-  let c=document.createElement('canvas');c.width=W;c.height=6000;
-  const h=Math.max(1754,Math.ceil(draw(c.getContext('2d'),W,0))+150);
-  const emit=S=>new Promise(res=>{try{const k=document.createElement('canvas');k.width=Math.round(W*S);k.height=Math.round(h*S);const g2=k.getContext('2d');g2.scale(S,S);draw(g2,W,h);watermark(g2,W,h);k.toBlob(b=>res(b),'image/png')}catch(e){res(null)}});
-  (async()=>{const S0=Math.max(1,Math.min(2,Math.sqrt(16e6/(W*h)),32000/h));let S=S0,b=await emit(S);
-    for(const r of [1,.7]){if(b)break;if(S>r){S=r;b=await emit(S)}}
+const B=t=>'**'+String(t).replace(/ /g,'\u00a0')+'**'; // met en valeur (gras + couleur) un élément du texte ; espaces insécables pour ne pas le couper
+function wrapT(g,t,x,y,mw,lh){t=String(t);
+  if(!t.includes('**')){let l='';t.split(' ').forEach(w=>{const n=l?l+' '+w:w;if(l&&g.measureText(n).width>mw){g.fillText(l,x,y);y+=lh;l=w}else l=n});if(l){g.fillText(l,x,y);y+=lh}return y}
+  const base=g.font,fill=g.fillStyle,bold='bold '+base,al=g.textAlign;g.textAlign='left';
+  const words=[];let cur=[];t.split('**').forEach((seg,i)=>{const b=i%2==1;seg.split(' ').forEach((p,k)=>{if(k>0){if(cur.length)words.push(cur);cur=[]}if(p)cur.push({s:p,b})})});if(cur.length)words.push(cur);
+  const mw1=w=>w.reduce((a,r)=>{g.font=r.b?bold:base;return a+g.measureText(r.s).width},0);g.font=base;const sp=g.measureText(' ').width;
+  const lines=[];let L=[],lw=0;words.forEach(w=>{const ww=mw1(w);if(L.length&&lw+sp+ww>mw){lines.push(L);L=[w];lw=ww}else{lw+=(L.length?sp:0)+ww;L.push(w)}});if(L.length)lines.push(L);
+  lines.forEach(L=>{let cx=x;L.forEach((w,i)=>{if(i)cx+=sp;w.forEach(r=>{g.font=r.b?bold:base;g.fillStyle=r.b?COL.ac:fill;g.fillText(r.s,cx,y);cx+=g.measureText(r.s).width})});y+=lh});
+  g.font=base;g.fillStyle=fill;g.textAlign=al;return y}
+let PO=0,PW=1240,PN=1; // PO : décalage des côtés (page courte : élargie pour garder un format A4, contenu centré) ; PN : nombre de colonnes de tableau (page longue : les lignes sont réparties en colonnes pour que tout reste lisible sans zoom)
+function paint(draw,name){const W0=1240,R=Math.SQRT2,RMAX=2.3,Wn=n=>W0+(n-1)*1140;
+  const ch=n=>{PO=0;PN=n;PW=Wn(n);const c=document.createElement('canvas');c.width=PW;c.height=6000;return Math.ceil(draw(c.getContext('2d'),PW,0))+150}; // hauteur du contenu pour n colonnes
+  let n=1,c=ch(1);while(n<4&&c>Wn(n)*RMAX){n++;c=ch(n)}
+  const Wc=Wn(n);let h,Wf,off;
+  if(n==1){h=Math.max(1754,c);Wf=Math.max(W0,Math.ceil(h/R));off=(Wf-W0)/2}else{h=Math.max(Math.round(Wc*1.2),c);Wf=Wc;off=0}
+  const emit=S=>new Promise(res=>{try{PN=n;PW=Wc;PO=off;const k=document.createElement('canvas');k.width=Math.round(Wf*S);k.height=Math.round(h*S);const g2=k.getContext('2d');g2.scale(S,S);g2.save();g2.translate(off,0);draw(g2,Wc,h);g2.restore();watermark(g2,Wf,h);PO=0;PN=1;PW=1240;k.toBlob(b=>res(b),'image/png')}catch(e){PO=0;PN=1;PW=1240;res(null)}});
+  (async()=>{const A=Wf*h,S0=Math.max(Math.min(1,Math.sqrt(64e6/A)),Math.min(2,Math.sqrt(16e6/A),32000/h,32000/Wf));let S=S0,b=await emit(S);
+    for(const r of [1,.7,.5,.35]){if(b)break;if(S>r){S=r;b=await emit(S)}}
     if(!b){toast('Document trop long pour être converti en image : réduisez le nombre de lignes',6000);return}
     const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();toast('Image PNG générée'+(S<1.95?' (résolution adaptée à la longueur du document)':''))})()}
-function frame(g,W,H){if(!H)return;g.fillStyle='#fff';g.fillRect(0,0,W,H);g.strokeStyle=COL.gold;g.lineWidth=4;g.strokeRect(24,24,W-48,H-48);g.strokeStyle=COL.ac;g.lineWidth=1.5;g.strokeRect(34,34,W-68,H-68)}
-function band(g,W,sub){const bh=178;g.fillStyle=COL.ac;g.fillRect(34,34,W-68,bh);g.fillStyle=COL.gold;g.fillRect(34,34+bh,W-68,7);g.fillStyle='#fff';g.textAlign='center';
+function frame(g,W,H){if(!H)return;if(PO){g.save();g.translate(-PO,0);const o=PO;PO=0;frame(g,W+2*o,H);PO=o;g.restore();return}g.fillStyle='#fff';g.fillRect(0,0,W,H);g.strokeStyle=COL.gold;g.lineWidth=4;g.strokeRect(24,24,W-48,H-48);g.strokeStyle=COL.ac;g.lineWidth=1.5;g.strokeRect(34,34,W-68,H-68)}
+function band(g,W,sub){if(PO){g.save();g.translate(-PO,0);const o=PO;PO=0;band(g,W+2*o,sub);PO=o;g.restore();return}const bh=178;g.fillStyle=COL.ac;g.fillRect(34,34,W-68,bh);g.fillStyle=COL.gold;g.fillRect(34,34+bh,W-68,7);g.fillStyle='#fff';g.textAlign='center';
   const ct=db.cfg.court||'Cour Suprême',s1=fitSz(g,ct,W-420,62,34,'bold ');g.font='bold '+s1+'px '+FS;
   if(g.measureText(ct).width>W-420){const L=wrapL(g,ct,W-420).slice(0,2);L.forEach((t,k)=>g.fillText(t,W/2,88+k*42));const s2=fitSz(g,sub,W-420,26,18,'italic ');g.font='italic '+s2+'px '+FS;g.fillText(fit(g,sub,W-420),W/2,176)} // nom très long : sur deux lignes
   else{g.fillText(ct,W/2,112);const s2=fitSz(g,sub,W-420,30,20,'italic ');g.font='italic '+s2+'px '+FS;g.fillText(fit(g,sub,W-420),W/2,162)}seals(g,W)}
@@ -303,12 +314,15 @@ function wrapL(g,t,mw){ // découpe un texte en lignes ; un mot trop long est co
       const n=l?l+(tk.glue?'':' ')+w:w;if(l&&g.measureText(n).width>mw){out.push(l);l=w}else l=n});
     out.push(l)});
   return out}
-function table(g,x,y,cols,rows,rh){const tw=cols.reduce((a,c)=>a+c.w,0),LH=34,PD=14;
+function table(g,x,y,cols,rows,rh){const n=Math.max(1,Math.min(PN,Math.ceil(rows.length/2)));if(n<2)return tableOne(g,x,y,cols,rows,rh);
+  const G=40,bw=(PW-2*x-(n-1)*G)/n,f=bw/cols.reduce((a,c)=>a+c.w,0),cc=cols.map(c=>({...c,w:c.w*f})),per=Math.ceil(rows.length/n); // n blocs de tableau côte à côte (en-tête répété), lignes compactes
+  return Math.max(...Array.from({length:n},(_,k)=>tableOne(g,x+k*(bw+G),y,cc,rows.slice(k*per,(k+1)*per),Math.min(rh,58),true)))}
+function tableOne(g,x,y,cols,rows,rh,cp){const tw=cols.reduce((a,c)=>a+c.w,0),LH=34,PD=14;
   g.fillStyle=COL.ac;g.fillRect(x,y,tw,68);g.fillStyle='#fff';g.font='bold 24px '+FS;g.textBaseline='middle';
   let cx=x;cols.forEach(c=>{g.textAlign=c.a=='r'?'right':'left';g.fillText(c.t,c.a=='r'?cx+c.w-PD:cx+PD,y+34);cx+=c.w});y+=68;
   rows.forEach((r,i)=>{
     const cells=r.map((v,j)=>{g.font=(cols[j].a=='r'?'bold ':'')+'26px '+FS;return Array.isArray(v)?wrapL(g,v[0],cols[j].w-2*PD):wrapL(g,v,cols[j].w-2*PD)}); // chaque cellule passe à la ligne si besoin
-    const h=Math.max(rh,Math.max(1,...cells.map((c,j)=>c.length*LH+(Array.isArray(r[j])?30:0)))+34);
+    const h=Math.max(rh,Math.max(1,...cells.map((c,j)=>c.length*LH+(Array.isArray(r[j])?30:0)))+(cp?22:34));
     g.fillStyle=i%2?'#fff':COL.bg;g.fillRect(x,y,tw,h);cx=x;
     r.forEach((v,j)=>{const c=cols[j],a=c.a=='r',px=a?cx+c.w-PD:cx+PD,mw=c.w-2*PD;g.textAlign=a?'right':'left';
       if(Array.isArray(v)){const L=cells[j],bh=L.length*LH+30,top=y+h/2-bh/2;g.font='26px '+FS;g.fillStyle=COL.tx;L.forEach((t,k)=>g.fillText(t,px,top+LH/2+k*LH));g.font='italic 21px '+FS;g.fillStyle=COL.mut;g.fillText(fit(g,v[1]||'',mw),px,top+L.length*LH+14)}
@@ -318,7 +332,7 @@ function table(g,x,y,cols,rows,rh){const tw=cols.reduce((a,c)=>a+c.w,0),LH=34,PD
   g.textBaseline='alphabetic';return y}
 function totBox(g,W,y,label,amount){const w=620,h=124,x=W-M-w;g.fillStyle=COL.bg;g.fillRect(x,y,w,h);g.strokeStyle=COL.gold;g.lineWidth=3;g.strokeRect(x,y,w,h);
   g.textAlign='right';g.fillStyle=COL.mut;g.font='bold 24px '+FS;g.fillText(label,W-M-24,y+44);g.fillStyle=COL.ac;g.font='bold 56px '+FS;g.fillText(fmt(amount),W-M-24,y+102);return y+h}
-function stamp(g,x,y,l1,l2,col){g.save();g.translate(x,y);g.rotate(-0.2);g.scale(1.7,1.7);g.globalAlpha=.6;g.strokeStyle=col;g.fillStyle=col;g.lineWidth=5;g.beginPath();g.arc(0,0,92,0,7);g.stroke();g.lineWidth=2;g.beginPath();g.arc(0,0,80,0,7);g.stroke();
+function stamp(g,x,y,l1,l2,col,k){k=k||1.7;g.save();g.translate(x,y);g.rotate(-0.2);g.scale(k,k);g.globalAlpha=.6;g.strokeStyle=col;g.fillStyle=col;g.lineWidth=5;g.beginPath();g.arc(0,0,92,0,7);g.stroke();g.lineWidth=2;g.beginPath();g.arc(0,0,80,0,7);g.stroke();
   g.textAlign='center';g.font='bold 24px '+FS;g.fillText(l1,0,-2);g.font='16px '+FS;g.fillText(fit(g,l2,140),0,26);g.restore()}
 // signatures communes aux factures et à l'attestation de remboursement : nom, prénom et grade uniquement (administrateur à gauche s'il génère, fondateur à droite)
 async function sigData(sn){const fs=STP.find(x=>x.role=='fondateur'),as=sn.gr=='admin'?STP.find(x=>String(x.login).toLowerCase()==sn.gl&&x.role!='fondateur'):null;
@@ -334,12 +348,12 @@ function sigBlock(g,W,y,sn,fs,as,fim,aim,paid){ // renvoie la hauteur utilisée
   if(aim||adm)sig(330,sn.gn||(as&&as.nom)||'',sn.gg||'',aim);
   if(fim||fnd)sig(W-330,fn,fg,fim);
   return o+470}
-function ribBox(g,W,y,rb,num){const rows=[['Titulaire',rb.t],['RIB',rb.r],['Banque',rb.b]].filter(r=>r[1]),w=W-2*M,vw=w-26-250-26; // valeurs complètes, sur plusieurs lignes si besoin (un RIB ne doit jamais être coupé)
+function ribBox(g,W,y,rb,num){const rows=[['Titulaire',rb.t],['RIB',rb.r],['Banque',rb.b]].filter(r=>r[1]),w=W-2*M,LW=rows.length>1?250:110,vw=w-26-LW-26; // valeurs complètes, sur plusieurs lignes si besoin (un RIB ne doit jamais être coupé)
   g.font='bold 33px '+FS;const ls=rows.map(r=>wrapL(g,r[1],vw)),rh=ls.map(l=>Math.max(56,l.length*42+14));
   const r0=104,note=r0+rh.slice(0,-1).reduce((a,b)=>a+b,0)+(ls[ls.length-1].length-1)*42+56,h=note+26;
   g.fillStyle=COL.bg;g.fillRect(M,y,w,h);g.strokeStyle=COL.gold;g.lineWidth=3;g.strokeRect(M,y,w,h);
   g.textAlign='left';g.fillStyle=COL.mut;g.font='bold 23px '+FS;g.fillText("COORDONNÉES BANCAIRES DE L'ÉMETTEUR — RÈGLEMENT PAR VIREMENT",M+26,y+46);
-  let yy=y+r0;rows.forEach((r,i)=>{g.fillStyle=COL.mut;g.font='27px '+FS;g.fillText(r[0]+' :',M+26,yy);g.fillStyle=COL.tx;g.font='bold 33px '+FS;ls[i].forEach((t,k)=>g.fillText(t,M+26+250,yy+k*42));yy+=rh[i]});
+  let yy=y+r0;rows.forEach((r,i)=>{g.fillStyle=COL.mut;g.font='27px '+FS;g.fillText(r[0]+' :',M+26,yy);g.fillStyle=COL.tx;g.font='bold 33px '+FS;ls[i].forEach((t,k)=>g.fillText(t,M+26+LW,yy+k*42));yy+=rh[i]});
   g.fillStyle=COL.mut;g.font='italic 24px '+FS;g.fillText("Merci d'indiquer le numéro de facture « "+num+" » en référence du virement.",M+26,y+note);return y+h}
 const un=b=>{let n=b,i=1;while(db.docs.some(d=>d.num==n))n=b+'-'+(++i);return n};
 function logDoc(type,sn,cible,total,nb,caseId){let data=JSON.stringify(sn);if(data.length>45000)data='';
@@ -356,15 +370,17 @@ function attest(cs){
     items:it.map(i=>[rf(i.f,'fine'),i.t,i.f.inf||'',i.f.ent||'—',i.v,i.vg||'',+i.f.amount||0])};
   logDoc('Attestation',sn,off,tot,it.length);renderAtt(sn)}
 async function renderAtt(sn){
-  const now=new Date(sn.date),n=sn.items.length,tot=sn.items.reduce((a,i)=>a+i[6],0);
+  const now=new Date(sn.date),n=sn.items.length,tot=sn.items.reduce((a,i)=>a+i[6],0),oneD=new Set(sn.items.map(i=>dfr(new Date(i[1])))).size==1; // une seule date de décision : indiquée dans le texte, sans colonne répétée
   const sd=stampFor({valLogin:sn.vl,val:sn.vn}),im=sd?await loadImg(sd.data):null,fs=STP.find(x=>x.role=='fondateur'),fim=fs&&!(sd&&sd.login==fs.login)?await loadImg(fs.data):null;
   paint((g,W,H)=>{
     frame(g,W,H);band(g,W,"Service des contestations d'amendes");
     g.fillStyle=COL.ac;g.textAlign='center';g.font='bold 54px '+FS;g.fillText('ATTESTATION DE CONTESTATION',W/2,322);
     g.fillStyle=COL.mut;g.font='27px '+FS;g.fillText('N° '+sn.num+'  ·  Délivrée le '+dfr(now),W/2,372);
     g.textAlign='left';g.fillStyle=COL.tx;g.font='31px '+FS;
-    let y=wrapT(g,laCour()+' atteste que '+sn.off+(sn.ob?' (né(e) le '+bd(sn.ob)+')':'')+' a contesté '+(n>1?'les '+n+' amendes':"l'amende")+' ci-dessous. '+(n>1?'Ces contestations ont été examinées et acceptées':'Cette contestation a été examinée et acceptée')+', et le montant correspondant a été reversé au justiciable.',M,456,W-2*M,48);
-    y=table(g,M,y+24,[{t:'N° amende',w:145},{t:'Décision',w:175},{t:'Infraction',w:290},{t:'Entité',w:160},{t:'Validé par',w:190},{t:'Montant',w:140,a:'r'}],
+    let y=wrapT(g,laCour()+' atteste que **'+sn.off+'**'+(sn.ob?' (né(e) le '+bd(sn.ob)+')':'')+' a contesté '+(n>1?'les '+B(n+' amendes'):"l'amende")+' ci-dessous. '+(n>1?'Ces contestations ont été examinées et acceptées':'Cette contestation a été examinée et acceptée')+(oneD?' le '+B(dfr(new Date(sn.items[0][1]))):'')+', et le montant correspondant a été reversé au justiciable.',M,456,W-2*M,48);
+    y=oneD?table(g,M,y+24,[{t:'N° amende',w:145},{t:'Infraction',w:320},{t:'Entité',w:290},{t:'Validé par',w:205},{t:'Montant',w:140,a:'r'}],
+      sn.items.map(i=>[i[0],i[2],i[3],[i[4],i[5]],fmt(i[6])]),88)
+    :table(g,M,y+24,[{t:'N° amende',w:140},{t:'Décision',w:160},{t:'Infraction',w:255},{t:'Entité',w:235},{t:'Validé par',w:175},{t:'Montant',w:135,a:'r'}],
       sn.items.map(i=>[i[0],dfr(new Date(i[1])),i[2],i[3],[i[4],i[5]],fmt(i[6])]),88);
     y=totBox(g,W,y+40,'SOMME TOTALE REVERSÉE',tot)+80;
     g.textAlign='left';g.fillStyle=COL.tx;g.font='28px '+FS;g.fillText('Fait le '+dfr(now),M,y);
@@ -396,16 +412,17 @@ async function renderInv(sn){
     bx(M,'ÉMETTEUR',p1,'Service des contestations');
     bx(W-M-bw,'FACTURÉ À',p2,'');
     g.textAlign='left';g.fillStyle=COL.tx;g.font='29px '+FS;
-    let y=wrapT(g,sn.ap?'Objet : '+sn.ap.obj+' — '+sn.ap.jur+(sn.ap.ref?', jugement n° '+sn.ap.ref:'')+(sn.ap.jd?' du '+dfr(new Date(sn.ap.jd)):'')+'.':"Objet : remboursement d'amendes annulées suite à des contestations acceptées. Période : "+period+'.',M,456+bh,W-2*M,44);
-    y=table(g,M,y+22,sn.ap?[{t:'N° jugement',w:200},{t:'Date',w:160},{t:'Partie',w:250},{t:'Désignation',w:490}]:[{t:'N° amende',w:145},{t:'Décision',w:175},{t:'Justiciable',w:235},{t:'Infraction',w:405},{t:'Montant',w:140,a:'r'}],
-      sn.items.map(i=>sn.ap?[i[0],dfr(new Date(i[1])),i[2],i[3]]:[i[0],dfr(new Date(i[1])),i[2],i[3],fmt(i[4])]),82);
+    let y=wrapT(g,sn.ap?'Objet : '+sn.ap.obj+' — '+sn.ap.jur+(sn.ap.ref?', jugement n° '+B(sn.ap.ref):'')+(sn.ap.jd?' du '+B(dfr(new Date(sn.ap.jd))):'')+'.':"Objet : remboursement d'amendes annulées suite à des contestations acceptées. Période : "+period+'.',M,456+bh,W-2*M,44);
+    y=table(g,M,y+22,sn.ap?[{t:'N° jugement',w:200},{t:'Partie',w:270},{t:'Désignation',w:630}]:[{t:'N° amende',w:145},{t:'Décision',w:175},{t:'Justiciable',w:235},{t:'Infraction',w:405},{t:'Montant',w:140,a:'r'}],
+      sn.items.map(i=>sn.ap?[i[0],i[2],i[3]]:[i[0],dfr(new Date(i[1])),i[2],i[3],fmt(i[4])]),82);
     y=totBox(g,W,y+36,paid?'TOTAL RÉGLÉ':'TOTAL À RÉGLER',tot)+56;
     if(!paid&&sn.rib&&sn.rib.r)y=ribBox(g,W,y,sn.rib,num)+70; // RIB de l'émetteur (défini par le fondateur) : uniquement sur les factures à régler
     g.textAlign='left';g.fillStyle=COL.tx;g.font='30px '+FS;g.fillText('Statut : '+(paid?'Payée':'À régler'),M,y);
     g.fillStyle=COL.mut;g.font='italic 26px '+FS;g.fillText(paid?'Merci pour votre règlement.':'Merci de régler cette facture dans les meilleurs délais.',M,y+42);
-    if(paid)stamp(g,W-310,y+120,'PAYÉ',db.cfg.court||'',COL.ok);
-    y+=paid?270:110;
-    y+=sigBlock(g,W,y,sn,fs,as,fim,aim,paid);
+    y+=paid?96:110;
+    if(paid){const two=(aim||sn.gr=='admin')&&(fim||sn.gr=='fondateur'||fs); // tampon « PAYÉ » à gauche, sous le statut, à la même hauteur que le tampon du magistrat (au centre, plus petit, si deux signataires)
+      stamp(g,two?W/2:M+230,y+222,'PAYÉ',db.cfg.court||'',COL.ok,two?1.15:1.7)}
+    y+=sigBlock(g,W,y,sn,fs,as,fim,aim,false);
     g.textAlign='center';g.font='20px '+FS;g.fillStyle=COL.mut;g.fillText('Document généré le '+now.toLocaleString('fr-FR')+' · '+num,W/2,(H||y)-56);
     return y},(sn.ap?'facture-appel-':'facture-')+slug(ent)+'-'+num+'.png')}
 // Attestation de remboursement remise au justiciable après un jugement en appel
@@ -416,9 +433,9 @@ async function renderRem(sn){
     g.fillStyle=COL.ac;g.textAlign='center';g.font='bold 52px '+FS;g.fillText('ATTESTATION DE REMBOURSEMENT',W/2,322);
     g.fillStyle=COL.mut;g.font='27px '+FS;g.fillText('N° '+sn.num+'  ·  Délivrée le '+dfr(now),W/2,372);
     g.textAlign='left';g.fillStyle=COL.tx;g.font='31px '+FS;
-    let y=wrapT(g,laCour()+' atteste que '+sn.off+(sn.ob?' (né(e) le '+bd(sn.ob)+')':'')+' a obtenu, par jugement'+(ap.ref?' n° '+ap.ref:'')+" rendu par la Cour d'appel"+(ap.jd?' le '+dfr(new Date(ap.jd)):'')+', le remboursement des sommes détaillées ci-dessous. Le montant total de '+fmt(tot)+' a été reversé au justiciable.',M,456,W-2*M,48);
+    let y=wrapT(g,laCour()+' atteste que **'+sn.off+'**'+(sn.ob?' (né(e) le '+bd(sn.ob)+')':'')+' a obtenu, par jugement'+(ap.ref?' n° '+B(ap.ref):'')+" rendu par la Cour d'appel"+(ap.jd?' le '+B(dfr(new Date(ap.jd))):'')+', le remboursement des sommes détaillées ci-dessous. Le montant total de '+B(fmt(tot))+' a été reversé au justiciable.',M,456,W-2*M,48);
     if(ap.obj){g.font='italic 28px '+FS;g.fillStyle=COL.mut;y=wrapT(g,'Objet : '+ap.obj+'.',M,y+8,W-2*M,42)}
-    y=table(g,M,y+24,[{t:'Date du jugement',w:250},{t:'Infraction',w:680},{t:'Montant',w:170,a:'r'}],sn.items.map(i=>[ap.jd?dfr(new Date(ap.jd)):'—',i[0],fmt(i[1])]),82);
+    y=table(g,M,y+24,[{t:'Infraction',w:930},{t:'Montant',w:170,a:'r'}],sn.items.map(i=>[i[0],fmt(i[1])]),82);
     y=totBox(g,W,y+40,'SOMME TOTALE REMBOURSÉE',tot)+80;
     g.textAlign='left';g.fillStyle=COL.tx;g.font='28px '+FS;g.fillText('Fait le '+dfr(now),M,y);
     y+=70;y+=sigBlock(g,W,y,sn,fs,as,fim,aim,false);
@@ -456,10 +473,11 @@ const fraisOf=id=>(db.frais||[]).filter(x=>x.caseId==id);
 function genRem(e){e.preventDefault();if(role=='user'){toast('Réservé aux administrateurs et au fondateur');return}
   const s=$('#rm-ps').value,p=s==='__o'?null:(s===''?null:RMP[+s]),nm=s==='__o'?$('#rm-pn').value.trim():(p?p.name:'');
   if(!nm){toast('Indiquez le justiciable');return}
-  const jdv=$('#rm-jd').value,jd=jdv?new Date(jdv+'T12:00:00').getTime():T(),ref=($('#rm-r').value||'').trim().slice(0,40);const co=caseOf(nm,$('#rm-n').value||''),dob=co.dob,cid=co.cid; // dossier créé automatiquement s'il n'existe pas
+  const jdv=$('#rm-jd').value,jd=jdv?new Date(jdv+'T12:00:00').getTime():T(),ref=($('#rm-r').value||'').trim().slice(0,40);
   if($('#raq')&&$('#raq').value.trim()){toast('Cliquez sur « Ajouter infraction » pour valider l\'infraction recherchée (ou videz la recherche)');return}
   const raw=[];for(const x of PK.ra.l){const m=Math.round(+x.amount||0);if(m>1e9){toast('Montant trop élevé');return}if(m<=0){toast('Montant manquant sur « '+x.n+' »');return}raw.push([x.n,m])}
   if(!raw.length){toast('Ajoutez au moins une infraction (bouton « Ajouter infraction »)');return}
+  const co=caseOf(nm,$('#rm-n').value||''),dob=co.dob,cid=co.cid; // dossier créé automatiquement s'il n'existe pas (seulement une fois la saisie validée)
   const mg=new Map();raw.forEach(([l,m])=>{const q=mg.get(l)||{n:0,m:0};q.n++;q.m+=m;mg.set(l,q)}); // lignes identiques regroupées (× n)
   const items=[...mg].map(([l,q])=>[l+(q.n>1?' ×'+q.n:''),q.m]),now=new Date();
   const sn={num:un('REM-'+wkey(now).replace(/-/g,'')+'-'+String(db.docs.filter(d=>d.type=='Attestation appel').length+1).padStart(3,'0')),date:T(),off:nm,ob:dob,cid,gl:String(sessionStorage.cs_login||'').toLowerCase(),gn:me.nom||'',gg:me.grade||'',gr:role||'',
@@ -874,7 +892,7 @@ function saveRib(e){if(e)e.preventDefault();if(role!='fondateur')return;const f=
   db.prefs=db.prefs.filter(p=>p.id!='rib');db.prefs.push({id:'rib',v:JSON.stringify({t:'',r:(f.r||'').trim(),b:''}),upd:T()});toast((f.r||'').trim()?'RIB enregistré':'RIB effacé');save()}
 function savePrefs(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
   [['fine',f.fine],['case',f.case]].forEach(([id,v])=>{v=v.trim().toUpperCase().replace(/[^A-Z0-9]/g,'')||(id=='fine'?'A':'D');db.prefs=db.prefs.filter(p=>p.id!=id);db.prefs.push({id,v,upd:T()})});toast('Identifiants enregistrés');save()}
-const APPV='30';let LASTSEEN=0,EXPIRED=false,LOCKT=null,LOCKI=null,ANN='';
+const APPV='36';let LASTSEEN=0,EXPIRED=false,LOCKT=null,LOCKI=null,ANN='';
 const loginView=()=>{const rem=localStorage.cs_rem||(EXPIRED?sessionStorage.cs_login||'':'');return `<div class="logbox"><img class="seal" src="${LOGO_SRC}" alt=""><h1>${esc(db.cfg.court||'Cour Suprême')}</h1><p class="mut" style="margin:4px 0 14px">Accès réservé aux membres de la Cour</p>
   ${EXPIRED?'<p class="tag w" style="display:block;padding:8px;margin:0 0 12px">⏱ Votre session a expiré : reconnectez-vous.</p>':''}
   <form class="card logc" onsubmit="doLogin(event)" style="text-align:left"><label>Identifiant</label><input name="login" ${rem?'':'autofocus'} required autocomplete="username" value="${esc(rem)}">
